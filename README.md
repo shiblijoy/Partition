@@ -42,16 +42,22 @@ buyers browse and request to buy animals online.
 ## Tech stack
 
 Next.js 16 (App Router, Server Actions) + TypeScript + Tailwind CSS +
-Prisma + SQLite. Auth is a small custom session (signed JWT in an httpOnly
-cookie via `jose`) rather than a heavier auth library — just one admin/staff
-user table with bcrypt-hashed passwords.
+Prisma + Postgres, with photos on Vercel Blob storage. Auth is a small
+custom session (signed JWT in an httpOnly cookie via `jose`) rather than a
+heavier auth library — just one admin/staff user table with bcrypt-hashed
+passwords.
 
 ## Getting started
 
+You need a Postgres database (any Postgres works — a local install, Neon,
+Supabase, Vercel Postgres) and, if you want to test photo uploads locally, a
+Vercel Blob store (`vercel blob create-store`, then copy its read-write
+token — this works from anywhere, not just when deployed on Vercel).
+
 ```bash
 npm install
-cp .env.example .env        # then edit AUTH_SECRET to a long random string
-npm run db:migrate           # creates prisma/dev.db and applies the schema
+cp .env.example .env        # fill in DATABASE_URL, AUTH_SECRET, BLOB_READ_WRITE_TOKEN
+npm run db:migrate           # applies the schema to your Postgres database
 npm run db:seed              # creates an admin login + a few sample animals
 npm run dev
 ```
@@ -79,21 +85,20 @@ Useful scripts:
 
 ## Deploying
 
-The app is a normal Next.js app — deploy to Vercel, a Node host, or a
-container. SQLite is fine for a single small farm; if you outgrow it, point
-`DATABASE_URL` at Postgres/MySQL and update the `provider` in
-`prisma/schema.prisma`, then re-run migrations.
+Built for Vercel (Postgres + Blob storage are both first-class there), but
+it's a normal Next.js app and will run on any Node host too.
 
-Remember to set real values for `AUTH_SECRET` and re-seed (or manually
-create) an admin user in production — don't ship the sample `.env` secrets.
+On Vercel:
+1. Add a Postgres database to the project (Storage tab, or `vercel storage`)
+   — sets `DATABASE_URL` for you.
+2. Add a Blob store to the project (Storage tab, or `vercel blob create-store`
+   + `vercel storage connect`) — sets `BLOB_READ_WRITE_TOKEN` for you.
+3. Set `AUTH_SECRET` yourself to a long random string (`openssl rand -hex 32`).
+4. Run `npm run db:migrate` (or `prisma migrate deploy` in a build step)
+   against that `DATABASE_URL`, then `npm run db:seed` once to create the
+   first admin login.
 
-**Photo storage caveat:** uploaded photos are written to disk under
-`public/uploads/` (see `src/lib/uploads.ts`). That works on any host with a
-persistent, writable filesystem — a VM, Docker container, or similar running
-`next start`. It will **not** work on Vercel or other serverless platforms,
-where the filesystem is read-only/ephemeral at request time — swap
-`saveAnimalPhoto`/`deleteAnimalPhotoFile` for an object storage SDK (S3,
-Cloudflare R2, etc.) before deploying there.
+Don't ship the sample `.env` secrets — generate fresh ones for production.
 
 ## Roadmap ideas (not built yet)
 
@@ -112,5 +117,3 @@ Roughly in the order they'd add the most value:
    website (PWA); a true native app (e.g. with push notifications) would be
    a separate project built against the same data via an API.
 7. **Multi-farm / multi-location** support if this grows beyond one farm.
-8. **Photo storage on serverless hosts** — move uploads to S3/R2 if you
-   deploy somewhere without a persistent filesystem (see caveat above).
