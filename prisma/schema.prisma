@@ -1,0 +1,142 @@
+// Prisma schema for the farm management app.
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+}
+
+enum Species {
+  COW
+  GOAT
+  LAMB
+  CHICKEN
+  OTHER
+}
+
+enum Sex {
+  MALE
+  FEMALE
+}
+
+enum AnimalStatus {
+  ACTIVE
+  FOR_SALE
+  SOLD
+  DECEASED
+}
+
+enum CostCategory {
+  FEED
+  MEDICAL
+  LABOR
+  HOUSING
+  TRANSPORT
+  OTHER
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(STAFF)
+  createdAt    DateTime @default(now())
+}
+
+model Animal {
+  id              String   @id @default(cuid())
+  tagId           String   @unique
+  species         Species
+  breed           String?
+  sex             Sex?
+  dob             DateTime?
+  acquisitionDate DateTime @default(now())
+  acquisitionCost Float    @default(0)
+  status          AnimalStatus @default(ACTIVE)
+  weightKg        Float?
+  notes           String?
+  imageUrl        String?
+
+  // Pricing
+  marginPercent   Float?   // overrides the species default margin when set
+  listedPrice     Float?   // manual override of the suggested price
+  forSale         Boolean  @default(false)
+
+  costEntries CostEntry[]
+  orders      Order[]
+  sale        SaleRecord?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([species])
+  @@index([status])
+}
+
+model CostEntry {
+  id       String       @id @default(cuid())
+  animal   Animal       @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  animalId String
+  date     DateTime     @default(now())
+  category CostCategory
+  amount   Float
+  note     String?
+  batchId  String?      // groups entries created together via bulk/batch logging
+
+  createdAt DateTime @default(now())
+
+  @@index([animalId])
+  @@index([date])
+}
+
+model Order {
+  id         String      @id @default(cuid())
+  animal     Animal      @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  animalId   String
+  buyerName  String
+  buyerPhone String
+  buyerEmail String?
+  note       String?
+  status     OrderStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+model SaleRecord {
+  id         String   @id @default(cuid())
+  animal     Animal   @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  animalId   String   @unique
+  buyerName  String
+  buyerPhone String?
+  buyerEmail String?
+  salePrice  Float
+  costToDate Float    // snapshot of accumulated cost at time of sale
+  profit     Float    // salePrice - costToDate, snapshot
+  saleDate   DateTime @default(now())
+}
+
+model PriceSetting {
+  id              String  @id @default(cuid())
+  species         Species @unique
+  marginPercent   Float   @default(25)
+}

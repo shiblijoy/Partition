@@ -1,0 +1,10 @@
+{
+  "name": "Green Pastures Farm",
+  "short_name": "Farm",
+  "description": "Browse and order animals directly from the farm.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafaf9",
+  "theme_color": "#047857",
+  "icons": []
+}
