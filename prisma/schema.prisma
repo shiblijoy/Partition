@@ -72,7 +72,6 @@ model Animal {
   status          AnimalStatus @default(ACTIVE)
   weightKg        Float?
   notes           String?
-  imageUrl        String?
 
   // Pricing
   marginPercent   Float?   // overrides the species default margin when set
@@ -82,6 +81,7 @@ model Animal {
   costEntries CostEntry[]
   orders      Order[]
   sale        SaleRecord?
+  photos      AnimalPhoto[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -133,6 +133,17 @@ model SaleRecord {
   costToDate Float    // snapshot of accumulated cost at time of sale
   profit     Float    // salePrice - costToDate, snapshot
   saleDate   DateTime @default(now())
+}
+
+model AnimalPhoto {
+  id        String   @id @default(cuid())
+  animal    Animal   @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  animalId  String
+  url       String
+  sortOrder Int      @default(0) // lowest is the cover photo shown on listing cards
+  createdAt DateTime @default(now())
+
+  @@index([animalId])
 }
 
 model PriceSetting {

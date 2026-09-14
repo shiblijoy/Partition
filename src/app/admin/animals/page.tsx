@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { prisma } from "@/lib/prisma";
 import { costToDate, suggestedPrice, currency } from "@/lib/cost";
 import { Badge, SPECIES_EMOJI } from "@/components/Badge";
@@ -22,7 +23,7 @@ export default async function AnimalsPage({
   const [animals, settings] = await Promise.all([
     prisma.animal.findMany({
       where,
-      include: { costEntries: true },
+      include: { costEntries: true, photos: { orderBy: { sortOrder: "asc" }, take: 1 } },
       orderBy: { createdAt: "desc" },
     }),
     prisma.priceSetting.findMany(),
@@ -102,11 +103,22 @@ export default async function AnimalsPage({
             {animals.map((animal) => (
               <tr key={animal.id} className="border-b border-stone-100 last:border-0">
                 <td className="px-4 py-3">
-                  <div className="font-medium text-stone-900">
-                    {SPECIES_EMOJI[animal.species]} {animal.tagId}
-                  </div>
-                  <div className="text-xs text-stone-500">
-                    {animal.breed ?? animal.species} {animal.sex ? `· ${animal.sex}` : ""}
+                  <div className="flex items-center gap-3">
+                    <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md bg-stone-100">
+                      {animal.photos[0] ? (
+                        <Image src={animal.photos[0].url} alt="" fill sizes="40px" className="object-cover" />
+                      ) : (
+                        <span className="flex h-full items-center justify-center text-lg">
+                          {SPECIES_EMOJI[animal.species]}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <div className="font-medium text-stone-900">{animal.tagId}</div>
+                      <div className="text-xs text-stone-500">
+                        {animal.breed ?? animal.species} {animal.sex ? `· ${animal.sex}` : ""}
+                      </div>
+                    </div>
                   </div>
                 </td>
                 <td className="px-4 py-3">

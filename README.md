@@ -24,9 +24,13 @@ buyers browse and request to buy animals online.
   (manually, or by completing a buyer's order) to record a `SaleRecord`
   snapshotting cost and profit at the time of sale.
 - Order inbox: confirm, cancel, or complete buyer requests.
+- Photo panel per animal: upload one or more photos at once (JPEG/PNG/WebP/GIF,
+  up to 8MB each) and delete any of them; the first photo uploaded is the
+  cover image used on listing cards and the storefront.
 
 **Public storefront (no login)**
-- Browse everything currently listed for sale, grouped by species, with price.
+- Browse everything currently listed for sale, grouped by species, with
+  price and a cover photo when one's been uploaded.
 - Animal detail page with an order form (name, phone, email, note). This
   creates a pending order for staff to follow up on — **no online payment
   yet**, orders are a reservation that staff confirms offline (cash, bank
@@ -69,6 +73,8 @@ Useful scripts:
 - `Order` — a buyer's request to purchase a specific animal.
 - `SaleRecord` — created when an animal is marked sold; snapshots cost and
   profit at that moment (so later cost edits don't rewrite sale history).
+- `AnimalPhoto` — uploaded photos for an animal; `sortOrder` decides which is
+  the cover (lowest first, so simply upload order).
 - `User` — admin/staff logins.
 
 ## Deploying
@@ -81,22 +87,30 @@ container. SQLite is fine for a single small farm; if you outgrow it, point
 Remember to set real values for `AUTH_SECRET` and re-seed (or manually
 create) an admin user in production — don't ship the sample `.env` secrets.
 
+**Photo storage caveat:** uploaded photos are written to disk under
+`public/uploads/` (see `src/lib/uploads.ts`). That works on any host with a
+persistent, writable filesystem — a VM, Docker container, or similar running
+`next start`. It will **not** work on Vercel or other serverless platforms,
+where the filesystem is read-only/ephemeral at request time — swap
+`saveAnimalPhoto`/`deleteAnimalPhotoFile` for an object storage SDK (S3,
+Cloudflare R2, etc.) before deploying there.
+
 ## Roadmap ideas (not built yet)
 
 Roughly in the order they'd add the most value:
 
 1. **More admin users / roles** — invite farmhands with limited permissions
    (e.g. can log costs but not change prices or delete animals).
-2. **Photos** — `Animal.imageUrl` already exists in the schema; add image
-   upload so storefront listings have pictures.
-3. **Notifications** — email/SMS to staff when a new order comes in, and to
+2. **Notifications** — email/SMS to staff when a new order comes in, and to
    buyers when their order is confirmed (currently everything is manual).
-4. **Real online payment** — Stripe/PayPal checkout instead of "we'll
+3. **Real online payment** — Stripe/PayPal checkout instead of "we'll
    contact you," once you're ready to take card payments.
-5. **Recurring costs** — auto-apply a daily housing/overhead cost per animal
+4. **Recurring costs** — auto-apply a daily housing/overhead cost per animal
    instead of logging it by hand every time.
-6. **Reports** — profit by species/month, cost trend charts, export to CSV.
-7. **Native mobile app** — the current app is an installable mobile-friendly
+5. **Reports** — profit by species/month, cost trend charts, export to CSV.
+6. **Native mobile app** — the current app is an installable mobile-friendly
    website (PWA); a true native app (e.g. with push notifications) would be
    a separate project built against the same data via an API.
-8. **Multi-farm / multi-location** support if this grows beyond one farm.
+7. **Multi-farm / multi-location** support if this grows beyond one farm.
+8. **Photo storage on serverless hosts** — move uploads to S3/R2 if you
+   deploy somewhere without a persistent filesystem (see caveat above).

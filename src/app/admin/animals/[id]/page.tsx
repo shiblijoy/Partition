@@ -10,11 +10,12 @@ import {
   DEFAULT_MARGIN_PERCENT,
 } from "@/lib/cost";
 import { Badge, SPECIES_EMOJI } from "@/components/Badge";
-import { addCostEntry, deleteCostEntry, updatePricing, markSold, deleteAnimal } from "./actions";
+import { addCostEntry, deleteCostEntry, updatePricing, markSold, deleteAnimal, addPhotos, deletePhoto } from "./actions";
 import { CostEntryForm } from "./CostEntryForm";
 import { PricingForm } from "./PricingForm";
 import { MarkSoldForm } from "./MarkSoldForm";
 import { DeleteButton } from "./DeleteButton";
+import { PhotoPanel } from "./PhotoPanel";
 
 export default async function AnimalDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -23,6 +24,7 @@ export default async function AnimalDetailPage({ params }: { params: Promise<{ i
     where: { id },
     include: {
       costEntries: { orderBy: { date: "desc" } },
+      photos: { orderBy: { sortOrder: "asc" } },
       sale: true,
     },
   });
@@ -41,6 +43,8 @@ export default async function AnimalDetailPage({ params }: { params: Promise<{ i
   const boundUpdatePricing = updatePricing.bind(null, animal.id);
   const boundMarkSold = markSold.bind(null, animal.id);
   const boundDeleteAnimal = deleteAnimal.bind(null, animal.id);
+  const boundAddPhotos = addPhotos.bind(null, animal.id);
+  const boundDeletePhoto = deletePhoto.bind(null, animal.id);
 
   return (
     <div className="space-y-6">
@@ -125,6 +129,8 @@ export default async function AnimalDetailPage({ params }: { params: Promise<{ i
         </section>
 
         <div className="space-y-6">
+          <PhotoPanel photos={animal.photos} addAction={boundAddPhotos} deleteAction={boundDeletePhoto} />
+
           <section className="rounded-xl border border-stone-200 bg-white p-5">
             <h2 className="text-sm font-semibold text-stone-700">Pricing &amp; sale</h2>
             <p className="mt-1 text-xs text-stone-500">

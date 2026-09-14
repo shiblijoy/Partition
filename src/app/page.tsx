@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { prisma } from "@/lib/prisma";
 import { suggestedPrice, currency } from "@/lib/cost";
 import { SPECIES_EMOJI } from "@/components/Badge";
@@ -10,7 +11,7 @@ export default async function StorefrontPage() {
   const [animals, settings] = await Promise.all([
     prisma.animal.findMany({
       where: { forSale: true, status: "FOR_SALE" },
-      include: { costEntries: true },
+      include: { costEntries: true, photos: { orderBy: { sortOrder: "asc" }, take: 1 } },
       orderBy: { createdAt: "desc" },
     }),
     prisma.priceSetting.findMany(),
@@ -51,16 +52,30 @@ export default async function StorefrontPage() {
                 <Link
                   key={animal.id}
                   href={`/animals/${animal.id}`}
-                  className="group rounded-xl border border-stone-200 bg-white p-5 transition hover:border-emerald-300 hover:shadow-sm"
+                  className="group overflow-hidden rounded-xl border border-stone-200 bg-white transition hover:border-emerald-300 hover:shadow-sm"
                 >
-                  <div className="text-4xl">{SPECIES_EMOJI[animal.species] ?? "🐾"}</div>
-                  <h2 className="mt-3 text-lg font-semibold text-stone-900 group-hover:text-emerald-700">
-                    {animal.breed ?? animal.species} · {animal.tagId}
-                  </h2>
-                  <p className="text-sm text-stone-500">
-                    {animal.sex ?? "Unknown sex"} {animal.weightKg ? `· ${animal.weightKg} kg` : ""}
-                  </p>
-                  <p className="mt-3 text-xl font-semibold text-emerald-700">{currency(price)}</p>
+                  <div className="relative flex aspect-video items-center justify-center bg-stone-100">
+                    {animal.photos[0] ? (
+                      <Image
+                        src={animal.photos[0].url}
+                        alt={`${animal.breed ?? animal.species} ${animal.tagId}`}
+                        fill
+                        sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <span className="text-5xl">{SPECIES_EMOJI[animal.species] ?? "🐾"}</span>
+                    )}
+                  </div>
+                  <div className="p-5">
+                    <h2 className="text-lg font-semibold text-stone-900 group-hover:text-emerald-700">
+                      {animal.breed ?? animal.species} · {animal.tagId}
+                    </h2>
+                    <p className="text-sm text-stone-500">
+                      {animal.sex ?? "Unknown sex"} {animal.weightKg ? `· ${animal.weightKg} kg` : ""}
+                    </p>
+                    <p className="mt-3 text-xl font-semibold text-emerald-700">{currency(price)}</p>
+                  </div>
                 </Link>
               );
             })}

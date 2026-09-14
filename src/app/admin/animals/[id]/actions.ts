@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
 import { costToDate } from "@/lib/cost";
 import { CostCategory } from "@prisma/client";
+import { saveAnimalPhoto, deleteAnimalPhotoFile, UploadError } from "@/lib/uploads";
 
 export type FormState = { error?: string };
 
@@ -118,7 +119,54 @@ export async function markSold(
 
 export async function deleteAnimal(animalId: string): Promise<void> {
   await requireSession();
-  await prisma.animal.delete({ where: { id: animalId } });
+  const photos = await prisma.animalPhoto.findMany({ where: { animalId }, select: { url: true } });
+  await prisma.animal.delete({ where: { id: animalId } }); // cascades to cost entries, orders, photos
+  await Promise.all(photos.map((p) => deleteAnimalPhotoFile(p.url)));
   revalidatePath("/admin/animals");
   redirect("/admin/animals");
+}
+
+export async function addPhotos(
+  animalId: string,
+  _prev: FormState,
+  formData: FormData
+): Promise<FormState> {
+  await requireSession();
+
+  const files = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) return { error: "Choose at least one photo." };
+
+  const lastPhoto = await prisma.animalPhoto.findFirst({
+    where: { animalId },
+    orderBy: { sortOrder: "desc" },
+  });
+  let nextSortOrder = (lastPhoto?.sortOrder ?? -1) + 1;
+
+  try {
+    for (const file of files) {
+      const url = await saveAnimalPhoto(animalId, file);
+      await prisma.animalPhoto.create({ data: { animalId, url, sortOrder: nextSortOrder++ } });
+    }
+  } catch (err) {
+    if (err instanceof UploadError) return { error: err.message };
+    throw err;
+  }
+
+  revalidatePath(`/admin/animals/${animalId}`);
+  revalidatePath("/");
+  revalidatePath(`/animals/${animalId}`);
+  return {};
+}
+
+export async function deletePhoto(animalId: string, photoId: string): Promise<void> {
+  await requireSession();
+  const photo = await prisma.animalPhoto.findUnique({ where: { id: photoId } });
+  if (!photo || photo.animalId !== animalId) return;
+
+  await prisma.animalPhoto.delete({ where: { id: photoId } });
+  await deleteAnimalPhotoFile(photo.url);
+
+  revalidatePath(`/admin/animals/${animalId}`);
+  revalidatePath("/");
+  revalidatePath(`/animals/${animalId}`);
 }

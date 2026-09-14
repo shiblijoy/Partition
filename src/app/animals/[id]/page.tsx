@@ -4,13 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { suggestedPrice, currency } from "@/lib/cost";
 import { SPECIES_EMOJI } from "@/components/Badge";
 import { OrderForm } from "./OrderForm";
+import { PhotoGallery } from "./PhotoGallery";
 
 export default async function PublicAnimalPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   const animal = await prisma.animal.findUnique({
     where: { id },
-    include: { costEntries: true },
+    include: { costEntries: true, photos: { orderBy: { sortOrder: "asc" } } },
   });
   if (!animal || !animal.forSale || animal.status !== "FOR_SALE") notFound();
 
@@ -29,7 +30,11 @@ export default async function PublicAnimalPage({ params }: { params: Promise<{ i
 
       <main className="mx-auto grid w-full max-w-4xl flex-1 gap-8 px-4 py-8 sm:grid-cols-2">
         <div>
-          <div className="text-6xl">{SPECIES_EMOJI[animal.species] ?? "🐾"}</div>
+          <PhotoGallery
+            photos={animal.photos}
+            fallbackEmoji={SPECIES_EMOJI[animal.species] ?? "🐾"}
+            alt={`${animal.breed ?? animal.species} ${animal.tagId}`}
+          />
           <h1 className="mt-3 text-2xl font-semibold text-stone-900">
             {animal.breed ?? animal.species} · {animal.tagId}
           </h1>
