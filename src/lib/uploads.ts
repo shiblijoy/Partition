@@ -1,8 +1,6 @@
-import { mkdir, writeFile, unlink } from "fs/promises";
-import path from "path";
+import { put, del } from "@vercel/blob";
 import { randomUUID } from "crypto";
 
-const UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads", "animals");
 const MAX_FILE_BYTES = 8 * 1024 * 1024; // 8MB per photo
 const ALLOWED_TYPES: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -13,7 +11,7 @@ const ALLOWED_TYPES: Record<string, string> = {
 
 export class UploadError extends Error {}
 
-/** Saves an uploaded photo for an animal to disk and returns its public URL (e.g. /uploads/animals/<id>/<file>). */
+/** Uploads a photo for an animal to Vercel Blob storage and returns its public URL. */
 export async function saveAnimalPhoto(animalId: string, file: File): Promise<string> {
   if (!(file instanceof File) || file.size === 0) {
     throw new UploadError("No file provided.");
@@ -26,22 +24,19 @@ export async function saveAnimalPhoto(animalId: string, file: File): Promise<str
     throw new UploadError(`"${file.name}" isn't a supported image type (use JPEG, PNG, WebP, or GIF).`);
   }
 
-  const dir = path.join(UPLOAD_ROOT, animalId);
-  await mkdir(dir, { recursive: true });
+  const pathname = `animals/${animalId}/${randomUUID()}.${ext}`;
+  const blob = await put(pathname, file, {
+    access: "public",
+    contentType: file.type,
+  });
 
-  const filename = `${randomUUID()}.${ext}`;
-  const bytes = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(dir, filename), bytes);
-
-  return `/uploads/animals/${animalId}/${filename}`;
+  return blob.url;
 }
 
-/** Deletes a previously saved photo from disk, given its public URL. Safe to call even if the file is already gone. */
+/** Deletes a previously uploaded photo from Blob storage. Safe to call even if it's already gone. */
 export async function deleteAnimalPhotoFile(url: string): Promise<void> {
-  if (!url.startsWith("/uploads/animals/")) return; // guard against deleting anything outside the upload dir
-  const filePath = path.join(process.cwd(), "public", url);
   try {
-    await unlink(filePath);
+    await del(url);
   } catch {
     // already gone — nothing to do
   }
