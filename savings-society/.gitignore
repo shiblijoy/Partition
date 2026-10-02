@@ -1,0 +1,19 @@
+/node_modules
+/.next/
+/out/
+/build
+.DS_Store
+*.pem
+npm-debug.log*
+.env*
+!.env.example
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+# database
+*.db
+*.db-journal
+
+# uploaded payment proofs & receipts (private runtime data, never commit)
+/storage/

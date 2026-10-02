@@ -1,0 +1,19 @@
+# systemd service: keeps Dreamhive running and restarts it if it stops or the server reboots.
+# Install: sudo cp deploy/dreamhive.service /etc/systemd/system/ && sudo systemctl enable --now dreamhive
+[Unit]
+Description=Dreamhive savings society app
+After=network.target
+
+[Service]
+Type=simple
+User=dreamhive
+WorkingDirectory=/opt/dreamhive/savings-society
+Environment=NODE_ENV=production
+# Next.js reads the rest (DATABASE_URL, AUTH_SECRET, STORAGE_DIR) from .env in the working directory.
+# Listens on localhost only; Caddy serves it to the internet over HTTPS.
+ExecStart=/opt/dreamhive/savings-society/node_modules/.bin/next start -H 127.0.0.1 -p 3000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+# Caddy gets a free HTTPS certificate for your domain automatically and passes requests to Dreamhive.
+# Replace dreamhive.example.com with your domain, then:
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+dreamhive.example.com {
+	encode gzip
+	# Deeds and scanned documents can be up to 20 MB.
+	request_body {
+		max_size 25MB
+	}
+	reverse_proxy 127.0.0.1:3000
+}
