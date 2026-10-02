@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef } from "react";
 import { primaryButton } from "@/components/ui";
 
-export type FormState = { error?: string; ok?: string };
+export type FormState = { error?: string; ok?: string; link?: { href: string; label: string } };
 
 /**
  * A form bound to a server action returning FormState: shows the error/success
@@ -15,7 +15,7 @@ export function ActionForm({
   pendingLabel = "Saving…",
   buttonClass = primaryButton,
   resetOnSuccess = true,
-  className = "space-y-3",
+  className = "flex flex-col gap-4",
   children,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
@@ -36,8 +36,13 @@ export function ActionForm({
   return (
     <form ref={formRef} action={formAction} className={className}>
       {children}
-      {state.error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>}
-      {state.ok && <p className="text-sm text-emerald-700">✓ {state.ok}</p>}
+      {state.error && <p className="rounded-xl bg-bad-bg px-4 py-3 text-sm font-semibold text-bad">{state.error}</p>}
+      {state.ok && <p className="rounded-xl bg-good-bg px-4 py-3 text-sm font-semibold text-good">{state.ok}</p>}
+      {state.link && (
+        <a href={state.link.href} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center justify-center rounded-xl border-2 border-brand px-4 text-sm font-bold no-underline">
+          {state.link.label}
+        </a>
+      )}
       <button type="submit" disabled={pending} className={buttonClass}>
         {pending ? pendingLabel : submitLabel}
       </button>

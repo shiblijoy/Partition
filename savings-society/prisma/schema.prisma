@@ -1,4 +1,4 @@
-// Prisma schema for the savings society app.
+// Prisma schema for Dreamhive, the savings society app.
 
 generator client {
   provider = "prisma-client-js"
@@ -38,39 +38,147 @@ enum ExpenseCategory {
   OTHER
 }
 
-model User {
-  id           String   @id @default(cuid())
-  name         String
-  phone        String   @unique
-  email        String?  @unique
-  passwordHash String
-  role         Role     @default(MEMBER)
-  joinMonth    String   // "YYYY-MM": first month this member owes a deposit for
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
+// Why a member is no longer active. Null while they're still a member.
+enum MemberExit {
+  LEFT
+  REMOVED
+  DECEASED
+}
 
-  payments         Payment[] @relation("MemberPayments")
-  reviewedPayments Payment[] @relation("ReviewedPayments")
+enum InvestmentKind {
+  LAND
+  BUSINESS
+  SHARES
+}
+
+enum InvestmentStatus {
+  PROPOSED // members are voting
+  ACTIVE // money is invested
+  CLOSED // sold / ended, principal is back in the fund
+  REJECTED // the vote failed or the admin withdrew it
+}
+
+enum VoteRule {
+  MAJORITY
+  TWO_THIRDS
+  EVERYONE
+}
+
+enum VoteChoice {
+  YES
+  NO
+}
+
+enum IncomeKind {
+  INVESTMENT_PROFIT
+  BANK_INTEREST
+  FDR_PROFIT
+  DONATION
+  LATE_FEE
+  OTHER
+}
+
+enum FdrStatus {
+  OPEN
+  CLOSED
+}
+
+enum WithdrawalKind {
+  FULL // leave the society
+  PARTIAL // take out part of savings, stay a member
+  NOMINEE // settlement to the nominee of a deceased member
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  PAID
+  DECLINED
+  CANCELLED
+}
+
+enum LandShareTiming {
+  ON_SALE
+  NOW
+}
+
+enum NoticeKind {
+  MEETING
+  VOTE
+  REMINDER
+  DECISION
+  GENERAL
+}
+
+enum AssetType {
+  LAND
+  BUSINESS
+  SHARES
+  SOCIETY
+}
+
+enum RequestStatus {
+  OPEN
+  DONE
+}
+
+model User {
+  id                 String      @id @default(cuid())
+  memberNo           Int?        @unique
+  name               String
+  phone              String      @unique
+  email              String?     @unique
+  passwordHash       String
+  mustChangePassword Boolean     @default(false)
+  passwordChangedAt  DateTime? // sessions issued before this are signed out
+  role               Role        @default(MEMBER)
+  joinMonth          String // "YYYY-MM": first month this member owes a deposit for
+  active             Boolean     @default(true)
+  exit               MemberExit?
+  exitedAt           DateTime?
+  createdAt          DateTime    @default(now())
+
+  // Profile (personal data: erased when a member leaves and asks for deletion)
+  nid             String?
+  dateOfBirth     String?
+  address         String?
+  nomineeName     String?
+  nomineeRelation String?
+  nomineePhone    String?
+  nomineeNid      String?
+
+  payments         Payment[]       @relation("MemberPayments")
+  reviewedPayments Payment[]       @relation("ReviewedPayments")
   expenses         Expense[]
+  votes            Vote[]
+  withdrawals      Withdrawal[]    @relation("MemberWithdrawals")
+  noticeReads      NoticeRead[]
+  documentViews    DocumentView[]
+  requests         MemberRequest[]
+  auditEntries     AuditLog[]
 }
 
 model Payment {
-  id         String        @id @default(cuid())
-  member     User          @relation("MemberPayments", fields: [memberId], references: [id], onDelete: Cascade)
-  memberId   String
-  forMonth   String        // "YYYY-MM" the member says this is for (a label; dues are worked out from the total)
-  amount     Float
-  method     PaymentMethod
-  reference  String?       // transaction ID / bank slip number
-  paidOn     DateTime
-  proofPath  String?       // relative path under /storage, served by /files/...
-  note       String?
-  status     PaymentStatus @default(PENDING)
+  id          String        @id @default(cuid())
+  member      User          @relation("MemberPayments", fields: [memberId], references: [id], onDelete: Cascade)
+  memberId    String
+  forMonth    String // "YYYY-MM": first month this payment is for (a label; dues are worked out from the total)
+  monthsCount Int           @default(1) // how many months one transfer covers
+  amount      Float
+  method      PaymentMethod
+  reference   String? // transaction ID / bank slip number
+  paidOn      DateTime
+  proofPath   String? // relative path under /storage, served by /files/...
+  note        String?
+  status      PaymentStatus @default(PENDING)
 
   reviewedBy   User?     @relation("ReviewedPayments", fields: [reviewedById], references: [id], onDelete: SetNull)
   reviewedById String?
   reviewedAt   DateTime?
-  reviewNote   String?   // shown to the member, e.g. why it was rejected
+  reviewNote   String? // shown to the member, e.g. why it was rejected
+
+  receiptNo  String? @unique // issued on approval
+  verifyCode String? @unique // short code anyone in the app can check a receipt with
 
   createdAt DateTime @default(now())
 
@@ -92,12 +200,215 @@ model Expense {
   @@index([date])
 }
 
+model Investment {
+  id             String           @id @default(cuid())
+  kind           InvestmentKind
+  name           String
+  details        String? // location / partner / company and share count
+  plan           String? // resale plan, profit terms or broker
+  amount         Float // money taken out of the fund
+  status         InvestmentStatus @default(PROPOSED)
+  voteRule       VoteRule         @default(MAJORITY)
+  voteEndsAt     DateTime?
+  currentValue   Float? // latest valuation (land, shares)
+  startedAt      DateTime?
+  closedAt       DateTime?
+  returnedAmount Float? // principal back in the fund when closed
+  createdAt      DateTime         @default(now())
+
+  votes     Vote[]
+  incomes   Income[]
+  documents Document[]
+}
+
+model Vote {
+  id           String     @id @default(cuid())
+  investment   Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+  investmentId String
+  member       User       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  memberId     String
+  choice       VoteChoice
+  createdAt    DateTime   @default(now())
+
+  @@unique([investmentId, memberId])
+}
+
+// Money that comes in on top of deposits. Shared equally by members, like profit.
+model Income {
+  id           String      @id @default(cuid())
+  kind         IncomeKind
+  amount       Float
+  date         DateTime
+  account      String? // which account it went into
+  description  String
+  filePath     String?
+  investment   Investment? @relation(fields: [investmentId], references: [id], onDelete: SetNull)
+  investmentId String?
+  createdAt    DateTime    @default(now())
+
+  @@index([date])
+}
+
+// Fixed deposit receipts. Opening one is a transfer between accounts, not a cost.
+model Fdr {
+  id        String    @id @default(cuid())
+  bank      String
+  amount    Float
+  rate      Float?
+  openedOn  DateTime
+  maturesOn DateTime
+  status    FdrStatus @default(OPEN)
+  closedOn  DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model Withdrawal {
+  id             String           @id @default(cuid())
+  member         User             @relation("MemberWithdrawals", fields: [memberId], references: [id], onDelete: Cascade)
+  memberId       String
+  kind           WithdrawalKind
+  status         WithdrawalStatus @default(PENDING)
+  amount         Float? // requested amount for a partial withdrawal
+  payTo          String
+  reason         String?
+  eraseData      Boolean          @default(false) // asked to delete their account
+  exitAs         MemberExit? // how membership ends when a full settlement is paid
+  attachmentPath String? // e.g. the death certificate for a nominee settlement
+
+  // Settlement worked out by the admin on approval
+  deposits    Float?
+  profitShare Float?
+  costShare   Float?
+  landShare   Float?
+  landTiming  LandShareTiming?
+  payable     Float?
+
+  approvedAt        DateTime?
+  paidAt            DateTime?
+  paidReference     String?
+  receiptNo         String?   @unique
+  memberConfirmedAt DateTime?
+  problemNote       String?
+  adminNote         String?
+  createdAt         DateTime  @default(now())
+
+  @@index([memberId])
+  @@index([status])
+}
+
+model Notice {
+  id             String       @id @default(cuid())
+  kind           NoticeKind
+  title          String
+  body           String
+  eventAt        DateTime?
+  place          String?
+  attachmentPath String?
+  createdAt      DateTime     @default(now())
+  reads          NoticeRead[]
+}
+
+model NoticeRead {
+  notice   Notice   @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  noticeId String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   String
+  readAt   DateTime @default(now())
+
+  @@id([noticeId, userId])
+}
+
+// Deeds, agreements and certificates. Never deleted: a new version replaces the old one.
+model Document {
+  id           String         @id @default(cuid())
+  assetType    AssetType
+  investment   Investment?    @relation(fields: [investmentId], references: [id], onDelete: SetNull)
+  investmentId String?
+  docType      String
+  title        String
+  version      Int            @default(1)
+  replacedBy   Document?      @relation("DocumentVersions", fields: [replacedById], references: [id], onDelete: SetNull)
+  replacedById String?        @unique
+  replaces     Document?      @relation("DocumentVersions")
+  filePath     String
+  createdAt    DateTime       @default(now())
+  views        DocumentView[]
+}
+
+model DocumentView {
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  viewedAt   DateTime @default(now())
+
+  @@id([documentId, userId])
+}
+
+// A closed month: the books were checked against real account statements and locked.
+model MonthClose {
+  id         String      @id @default(cuid())
+  month      String      @unique // "YYYY-MM"
+  appBalance Float
+  note       String?
+  closedAt   DateTime    @default(now())
+  closedBy   String
+  lines      ReconLine[]
+}
+
+model ReconLine {
+  id            String     @id @default(cuid())
+  monthClose    MonthClose @relation(fields: [monthCloseId], references: [id], onDelete: Cascade)
+  monthCloseId  String
+  account       String
+  actual        Float
+  statementPath String?
+}
+
+// A member asking the admin for something the app can't do on its own, e.g. fix their details.
+model MemberRequest {
+  id        String        @id @default(cuid())
+  member    User          @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  memberId  String
+  message   String
+  status    RequestStatus @default(OPEN)
+  createdAt DateTime      @default(now())
+}
+
+// Admin handover: both admins confirm a snapshot of the books before access moves.
+model Handover {
+  id                  String    @id @default(cuid())
+  fromId              String
+  toId                String
+  snapshot            String // JSON of the figures both admins confirmed
+  outgoingConfirmedAt DateTime?
+  incomingConfirmedAt DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime  @default(now())
+}
+
+// Who did what, and when. Never edited or deleted.
+model AuditLog {
+  id        String   @id @default(cuid())
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId   String?
+  action    String
+  detail    String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 // Single row (id = 1) holding society-wide settings.
 model Setting {
-  id             Int    @id @default(1)
-  societyName    String @default("Savings Society")
-  monthlyAmount  Float  @default(10000)
-  currencySymbol String @default("৳")
-  startMonth     String // "YYYY-MM": the society's first deposit month
-  paymentInfo    String? // shown on the member "Pay" screen, e.g. the bKash/bank account to send to
+  id              Int       @id @default(1)
+  societyName     String    @default("Dreamhive")
+  monthlyAmount   Float     @default(10000)
+  currencySymbol  String    @default("৳")
+  startMonth      String // "YYYY-MM": the society's first deposit month
+  paymentInfo     String? // shown on the member "Pay" screen, e.g. the bKash/bank account to send to
+  reminderDay     Int       @default(10) // deposits are due by this day of the month
+  defaultVoteRule VoteRule  @default(MAJORITY)
+  cashAccounts    String    @default("Bank savings account\nbKash (society number)\nCash with treasurer") // one per line, used when closing a month
+  lastExportAt    DateTime?
 }

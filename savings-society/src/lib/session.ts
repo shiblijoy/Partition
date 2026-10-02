@@ -16,13 +16,17 @@ export type SessionPayload = {
   userId: string;
   name: string;
   role: "ADMIN" | "MEMBER";
+  issuedAt?: number; // seconds since epoch
 };
 
-export async function createSession(payload: SessionPayload): Promise<void> {
+const SHORT_SESSION_SECONDS = 60 * 60 * 12; // "keep me logged in" unticked: a browser-session cookie, at most 12 hours
+
+export async function createSession(payload: SessionPayload, remember = true): Promise<void> {
+  const ttl = remember ? SESSION_TTL_SECONDS : SHORT_SESSION_SECONDS;
   const token = await new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime(`${SESSION_TTL_SECONDS}s`)
+    .setExpirationTime(`${ttl}s`)
     .sign(getSecret());
 
   const cookieStore = await cookies();
@@ -31,7 +35,7 @@ export async function createSession(payload: SessionPayload): Promise<void> {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: SESSION_TTL_SECONDS,
+    ...(remember ? { maxAge: SESSION_TTL_SECONDS } : {}),
   });
 }
 
@@ -46,6 +50,7 @@ export async function getSession(): Promise<SessionPayload | null> {
       userId: payload.userId as string,
       name: payload.name as string,
       role: payload.role as "ADMIN" | "MEMBER",
+      issuedAt: payload.iat,
     };
   } catch {
     return null;

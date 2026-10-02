@@ -1,99 +1,151 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireMember } from "@/lib/auth-guard";
 import { getSettings, money } from "@/lib/settings";
 import { memberLedger } from "@/lib/ledger";
-import { approvedTotalFor, fundSummary } from "@/lib/society";
-import { addMonths, currentMonth, monthLabel, monthRange } from "@/lib/months";
-import { Badge, Card, MonthCell, MonthLegend, StatCard, primaryButton } from "@/components/ui";
+import { fundSummary, memberPosition } from "@/lib/society";
+import { currentMonth, monthLabel } from "@/lib/months";
+import { fmtDay } from "@/lib/format";
+import { Icon } from "@/components/icons";
+import { Badge, METHOD_LABELS, darkButton } from "@/components/ui";
+
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+}
 
 export default async function MemberHome() {
   const session = await requireMember();
-  const [settings, member, approvedTotal, recent, fund] = await Promise.all([
+  const [settings, member, fund, latest, recent, unread] = await Promise.all([
     getSettings(),
     prisma.user.findUniqueOrThrow({ where: { id: session.userId } }),
-    approvedTotalFor(session.userId),
-    prisma.payment.findMany({ where: { memberId: session.userId }, orderBy: { createdAt: "desc" }, take: 5 }),
     fundSummary(),
+    prisma.payment.findFirst({ where: { memberId: session.userId }, orderBy: { createdAt: "desc" } }),
+    prisma.payment.findMany({
+      where: { memberId: session.userId, status: "APPROVED" },
+      orderBy: { reviewedAt: "desc" },
+      take: 3,
+    }),
+    prisma.notice.count({ where: { reads: { none: { userId: session.userId } } } }),
   ]);
+  if (member.exit) {
+    // Settled out: all that's left is confirming the payout.
+    const payout = await prisma.withdrawal.findFirst({ where: { memberId: member.id, status: "PAID" }, orderBy: { paidAt: "desc" } });
+    if (payout) redirect(`/member/payouts/${payout.id}`);
+  }
+  const position = await memberPosition(member.id, fund);
   const $ = (n: number) => money(n, settings.currencySymbol);
-  const ledger = memberLedger(member, approvedTotal, settings);
+  const ledger = memberLedger(member, position.deposits, settings);
+  const monthsPaid = settings.monthlyAmount > 0 ? Math.floor(position.deposits / settings.monthlyAmount + 1e-9) : 0;
   const now = currentMonth();
-  const thisMonth = ledger.statusFor(now);
-  const gridStart = addMonths(now, -11) > ledger.firstMonth ? addMonths(now, -11) : ledger.firstMonth;
-  const gridMonths = monthRange(gridStart, addMonths(now, 2));
-  const myNet = ledger.paid - fund.expenseSharePerMember;
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl bg-gradient-to-br from-teal-600 to-teal-800 p-5 text-white shadow-sm">
-        <p className="text-sm text-teal-100">Hello, {member.name.split(" ")[0]}</p>
-        <p className="mt-3 text-sm text-teal-100">{ledger.due > 0 ? "You owe" : "You're all set"}</p>
-        <p className="text-3xl font-semibold">{ledger.due > 0 ? $(ledger.due) : "✓ Up to date"}</p>
-        <p className="mt-1 text-sm text-teal-100">
-          {monthLabel(now, "long")}:{" "}
-          {thisMonth === "paid" ? "paid" : thisMonth === "partial" ? "partly paid" : `${$(settings.monthlyAmount)} due`}
-          {ledger.advance > 0 && ` · ${$(ledger.advance)} paid in advance`}
-        </p>
-        <Link
-          href="/member/pay"
-          className="mt-4 inline-block rounded-lg bg-white px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50"
-        >
-          ➕ Submit a payment
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="My total deposits" value={$(ledger.paid)} hint="Approved by admin" tone="good" />
-        <StatCard label="Expected so far" value={$(ledger.expected)} hint={`${ledger.monthsOwed} months × ${$(settings.monthlyAmount)}`} />
-        <StatCard label="My share of costs" value={$(fund.expenseSharePerMember)} hint={`Split across ${fund.activeMembers} members`} />
-        <StatCard label="My net savings" value={$(myNet)} hint="Deposits − cost share" tone={myNet >= 0 ? "good" : "bad"} />
-      </div>
-
-      <Card title="Monthly deposits">
-        <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-8 lg:grid-cols-14">
-          {gridMonths.map((m) => (
-            <MonthCell key={m} month={m} status={ledger.statusFor(m)} />
-          ))}
+    <div className="flex flex-col gap-[18px]">
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-0.5">
+          <div className="text-[13px] font-medium text-muted">{settings.societyName}</div>
+          <div className="text-[22px] font-bold">Hi, {member.name.split(" ")[0]}</div>
         </div>
-        <MonthLegend />
-        <p className="mt-2 text-xs text-slate-500">
-          {ledger.paidThrough ? `Paid through ${monthLabel(ledger.paidThrough, "long")}. ` : ""}
-          Payments are applied to your oldest unpaid month first.
-        </p>
-      </Card>
-
-      <Card
-        title="Recent submissions"
-        action={
-          <Link href="/member/history" className="text-sm font-medium text-teal-700">
-            View all
+        <div className="flex items-center gap-2">
+          <Link
+            href="/member/notices"
+            aria-label={unread ? `Notices, ${unread} unread` : "Notices"}
+            className="relative flex h-11 w-11 items-center justify-center rounded-full border border-line bg-white text-ink"
+          >
+            <Icon name="bell" />
+            {unread > 0 && <span className="absolute right-2.5 top-2.5 h-2.5 w-2.5 rounded-full bg-[#D9822B] ring-2 ring-white" />}
           </Link>
-        }
-      >
-        {recent.length === 0 ? (
-          <div className="py-6 text-center">
-            <p className="text-sm text-slate-500">You haven&apos;t submitted any payments yet.</p>
-            <Link href="/member/pay" className={`mt-3 inline-block ${primaryButton}`}>
-              Submit your first payment
-            </Link>
+          <Link
+            href="/member/profile"
+            aria-label="My profile"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-brand text-[15px] font-bold text-white no-underline"
+          >
+            {initials(member.name)}
+          </Link>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3.5 rounded-[20px] bg-brand p-5 text-white">
+        <div className="flex flex-col gap-1">
+          <div className="text-[13px] text-brand-soft">My approved savings</div>
+          <div className="text-[34px] font-extrabold tracking-tight">{$(position.deposits)}</div>
+          <div className="text-[13px] text-brand-soft">
+            {monthsPaid} of {ledger.monthsOwed} months approved · since {monthLabel(ledger.firstMonth)}
           </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2.5 border-t border-[#3E8370] pt-3.5">
+          <div className="flex flex-col gap-0.5">
+            <div className="text-xs text-brand-soft">My share of costs</div>
+            <div className="text-base font-bold">−&nbsp;{$(position.costShare)}</div>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <div className="text-xs text-brand-soft">Net value</div>
+            <div className="text-base font-bold">{$(position.net)}</div>
+          </div>
+        </div>
+      </div>
+
+      {latest && latest.status !== "APPROVED" ? (
+        <div className="flex flex-col gap-3 rounded-2xl border border-line bg-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-0.5">
+              <div className="text-[15px] font-bold">{monthLabel(latest.forMonth, "long")}{latest.monthsCount > 1 && ` + ${latest.monthsCount - 1} more`}</div>
+              <div className="text-[13px] text-muted">{$(latest.amount)} · submitted {fmtDay(latest.createdAt)}</div>
+            </div>
+            {latest.status === "PENDING" ? <Badge label="PENDING" /> : <Badge label="REJECTED" />}
+          </div>
+          <p className="text-[13px] leading-relaxed text-muted">
+            {latest.status === "PENDING"
+              ? "Your proof is with the admin. It will be approved once the money shows in the society account."
+              : `Admin: ${latest.reviewNote ?? "rejected"}. Please pay again or resubmit with a clearer proof.`}
+          </p>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white p-4">
+          <div className="flex flex-col gap-0.5">
+            <div className="text-[15px] font-bold">{monthLabel(now, "long")}</div>
+            <div className="text-[13px] text-muted">
+              {ledger.due > 0 ? `${$(ledger.due)} due by ${settings.reminderDay} ${monthLabel(now).split(" ")[0]}` : "Nothing due right now"}
+            </div>
+          </div>
+          {ledger.due > 0 ? <Badge label="OPEN" /> : <Badge label="APPROVED" />}
+        </div>
+      )}
+
+      <Link href="/member/pay" className={`${darkButton} no-underline`}>
+        <Icon name="upload" />
+        Upload payment proof
+      </Link>
+
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-[15px] font-bold">Recent payments</h2>
+          <Link href="/member/history" className="py-2 text-[13px] font-semibold">See all</Link>
+        </div>
+        {recent.length === 0 ? (
+          <p className="rounded-xl border border-line bg-white p-4 text-sm text-muted">No approved payments yet.</p>
         ) : (
-          <ul className="divide-y divide-slate-100">
-            {recent.map((p) => (
-              <li key={p.id} className="flex items-center justify-between gap-3 py-2.5">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">{$(p.amount)} · {monthLabel(p.forMonth)}</p>
-                  {p.status === "REJECTED" && p.reviewNote && (
-                    <p className="truncate text-xs text-red-600">Reason: {p.reviewNote}</p>
-                  )}
+          recent.map((p) => (
+            <Link
+              key={p.id}
+              href={`/member/receipts/${p.id}`}
+              className="flex items-center justify-between rounded-xl border border-line bg-white px-3.5 py-3 text-ink no-underline"
+            >
+              <div className="flex flex-col gap-0.5">
+                <div className="text-sm font-semibold">{monthLabel(p.forMonth, "long")}{p.monthsCount > 1 && ` + ${p.monthsCount - 1}`}</div>
+                <div className="text-xs text-muted">
+                  {METHOD_LABELS[p.method]} · approved {p.reviewedAt ? fmtDay(p.reviewedAt) : ""}
                 </div>
-                <Badge label={p.status} />
-              </li>
-            ))}
-          </ul>
+              </div>
+              <Badge label="APPROVED" />
+            </Link>
+          ))
         )}
-      </Card>
+      </div>
     </div>
   );
 }

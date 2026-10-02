@@ -1,7 +1,8 @@
 # Green Pastures Farm — Farm Management App
 
-> This repo also contains a separate app, **[`savings-society/`](savings-society/README.md)**, for
-> monthly society deposits with payment-proof uploads and admin approval.
+> This repo also contains a separate app, **[Dreamhive](savings-society/README.md)** (in `savings-society/`),
+> for a savings society: monthly deposits with payment proofs and receipts, investments and voting,
+> withdrawals, notices, asset documents, month-end reconciliation and reports.
 
 A web app (mobile-friendly, installable as a home-screen app) for running a
 small livestock operation: track every cow, goat, lamb, and chicken, log

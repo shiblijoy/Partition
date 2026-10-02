@@ -1,11 +1,11 @@
 {
-  "name": "Savings Society",
-  "short_name": "Society",
-  "description": "Submit monthly deposits and track the society fund.",
+  "name": "Dreamhive",
+  "short_name": "Dreamhive",
+  "description": "Monthly deposits, investments and votes for the Dreamhive savings society.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#0f766e",
+  "background_color": "#F4F3EE",
+  "theme_color": "#0F5E4A",
   "icons": [
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ]

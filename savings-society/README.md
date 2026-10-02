@@ -1,82 +1,78 @@
-# Savings Society — Deposits, Proofs & Approvals
+# Dreamhive — savings society app
 
-A mobile + desktop app for a savings society where every member deposits a
-fixed amount each month (default **৳10,000**). Members upload proof of each
-payment from their phone; the admin checks the money arrived in the account
-and approves it. Totals, dues, costs and each member's share are calculated
-automatically.
+A phone-first member app and a desktop admin console for a savings society:
+every member deposits a fixed amount each month (default **৳10,000**), the
+society invests the pooled money, and profits, costs and settlements are
+shared equally. It's one responsive web app that members can **add to their
+phone's home screen**.
 
-It's a responsive web app that can be **installed on a phone's home screen**
-(PWA, with a bottom tab bar like a native app) and used on a desktop
-browser, so you build and run one codebase.
+The screens follow the *Dreamhive App* design canvas. Bracketed text such as
+`[Location]`, `[Bank]` or `[Admin name]` in the demo data are placeholders
+from the design, waiting for the society's real details.
 
-## How it works
+## Member app (phone)
 
-**Members (phone-first)**
-- **Home**: how much they owe (or "up to date"), total deposited, expected so
-  far, their share of society costs, and net savings. A month-by-month grid
-  shows paid, part-paid, due and upcoming months.
-- **Pay**: pick the month, amount, method (bKash / Nagad / Rocket / bank /
-  cash), transaction ID and date, then take a photo or attach a screenshot/PDF
-  of the receipt. The form fills in the next unpaid month and the amount that
-  clears what they owe. The admin's "where to send money" note is shown here.
-- **History**: every submission with its status. If a payment is rejected,
-  the admin's reason is shown.
-- **Fund**: open books. Members see total collected, costs, fund balance and
-  every cost entry, with receipts.
-- **Account**: profile and change password.
+| Screen | What it does |
+|---|---|
+| Login | Mobile number + password, show/hide, "keep me logged in". |
+| Set / change password | Forced at first login (temporary password from the admin). Changing it signs out every other phone. |
+| Home | Approved savings, cost share, net value, this month's status, recent approved payments, unread-notice dot. |
+| Pay | Pick one or more months (amount worked out), method, transaction ID, proof photo/PDF, note. |
+| History | Deposited / pending / due, every submission with its status, rejection reasons, receipt links, payouts. |
+| Receipt | Official receipt: number, amount in words, months, method, approver, savings total, verification code. Download (print to PDF) and Share. |
+| Investments & voting | Society totals, your profit share, open proposals with live yes/no tally and the votes needed; vote or change your vote. |
+| Withdraw | Leave the society or take out part of your savings, with the estimated settlement; tracker and cancel until approved. |
+| Payout receipt | The settlement breakdown; confirm "I received ৳…" or report a problem. |
+| Profile & nominee | Masked NID, nominee, request a change, account deletion (= full withdrawal, personal data erased after payout). |
+| Notices | Meetings (add to calendar), votes, reminders and decisions; opening the page marks them read. |
+| Asset documents / Society books | Read-only deeds and agreements by asset; open books of income and costs. |
+| Check a receipt | Enter a receipt's code to confirm the society issued it. |
 
-**Admin**
-- **Dashboard**: fund balance, total collected vs expected, costs,
-  outstanding dues, this month's collection progress, and who is behind.
-- **Approvals**: a queue of pending proofs, showing the photo, amount,
-  transaction ID and what the member currently owes. **Approve** only after
-  confirming the money arrived. **Reject** needs a reason. Approved and
-  rejected payments can be undone or deleted.
-- **Members**: list with deposited, expected and due/ahead amounts and the
-  month they've paid up to. Add members (phone + starting password). Each
-  member's page lets you edit details, deactivate, reset the password, and
-  **record a cash payment** directly (approved immediately).
-- **Costs**: log society expenses (bank charges, meetings, etc.) with
-  optional receipts.
-- **Report**: a member × month paid/due matrix, member accounts (deposited,
-  expected, due, cost share, net savings), monthly cash flow with running
-  balance, and **CSV export** for Excel or Google Sheets.
-- **Settings**: society name, monthly amount, currency symbol, first month,
-  and payment instructions for members.
+## Admin console (desktop, works on phones too)
+
+| Screen | What it does |
+|---|---|
+| Dashboard | Fund balance, collection progress, approval queue with one-tap approve, unpaid members with WhatsApp reminder links, withdrawal and member requests. |
+| Review proof | The uploaded proof, payment details, a three-point checklist before approving, required message when rejecting, then on to the next proof. |
+| Approvals | Pending / approved / rejected lists; undo or delete. |
+| Members | Withdrawal requests, member list with status (Active, Behind, Exiting, Left, Removed, Deceased) and search, add member with joining rule and temporary password + WhatsApp invite. |
+| Member detail | Profile and nominee, year payment grid, record a cash payment for several months (receipts issued), reset password, remove (opens a settlement), mark as deceased (opens a settlement to the nominee), restore. |
+| Settlement | Settlement worked out from deposits, profit share, cost share and land gain (paid now or on sale); approve, decline, record the payout, issue the payout receipt. |
+| Fund & expenses | Totals, expenses with receipts, monthly collection chart, add expense. |
+| Investments | Cash, invested, profit, unrealised gain; votes in progress (close the vote → invest or reject, with a decision notice); per-investment valuation, profit payments, sell/close, documents; new proposal form with vote rule and cash check. |
+| Income & FDRs | FDRs (a transfer, not a cost) with maturity, and income (bank interest, FDR profit, donations, late fees) shared as profit. |
+| Close month | Enter each account's real balance; the difference must be zero, booked as a bank charge, or explained in a note; the month is then locked. |
+| Notice board | Post meetings / reminders / decisions with attachments, share text for the WhatsApp group, read counts. |
+| Asset documents | Upload with versions (nothing is deleted), "seen by" counts, filters. |
+| Reports | Monthly report, annual summary, member statement, audit log and deposits grid — print to PDF, download CSV, share a summary with members. Draft until the month is closed. |
+| Settings | Society rules, society accounts, export everything (Excel workbook + ZIP of files), add admins, and an admin handover both admins confirm. |
 
 ## The calculations
 
-- **Expected** = months since the member's first deposit month (or the
-  society's start month, whichever is later), up to and including this month,
-  × the monthly amount.
-- **Deposited** = the sum of the member's *approved* payments. Pending and
-  rejected payments never count.
-- **Due** = expected − deposited (when positive). **Paid ahead** = the reverse.
-- Month status: approved money is applied to the **oldest month first**. A
-  ৳20,000 transfer covers two months, and a short payment shows that month
-  as part paid. Members never have to split transfers by month.
-- **Fund balance** = all approved deposits − all costs.
-- **Cost share** = total costs ÷ active members. **Net savings** = deposited − cost share.
+- **Expected / due**: months since the member's first month × the monthly
+  amount, against their *approved* deposits. Money is applied oldest month first.
+- **Profit** = recorded income + gain (or loss) on closed investments.
+  **Costs** = expenses. Both are split equally across current members.
+- **Fund balance** = deposits − costs + profit − payouts. **Cash** = fund
+  balance − money currently invested. Estimated land/share gains are shown
+  separately and only count once sold.
+- **Settlement** = deposits (less earlier partial withdrawals) + profit share −
+  cost share (+ land share if paid now). It's frozen when the admin approves.
+  A member who leaves takes their share out of the profit and cost pools, so
+  the rest is split across whoever remains.
+- A member stops counting as soon as their settlement is paid; they keep their
+  login until they confirm the payout.
 
-## Security & privacy
+## Security & records
 
-- Payment proofs are stored **outside `public/`** (in `storage/`) and served
-  only through `/files/...`, which checks the session. A member can see only
-  their own proofs; the admin can see all. Cost receipts are visible to every
-  signed-in member, since the books are open.
-- Every server action checks the role again. The member ID always comes from
-  the session, never from the form.
-- On each request the user row is re-checked, so deactivating a member signs
-  them out immediately.
-- Approve and reject only act on payments that are still pending, so a
-  double tap or two admins can't process a payment twice.
-
-## Tech stack
-
-Next.js 16 (App Router, Server Actions) + TypeScript + Tailwind CSS 4 +
-Prisma + SQLite, with the same small JWT-cookie auth as the farm app in the
-repo root.
+- Proofs, statements and certificates live outside `public/` in `storage/`
+  and are served by `/files/...` after a session check: members see only their
+  own proofs; receipts, documents and notice attachments are open to members;
+  statements are admin-only.
+- Every server action re-checks the role; member IDs come from the session.
+- Approvals only act on pending payments, so a double tap can't approve twice.
+- Admin actions are written to an append-only **audit log**.
+- Closed months are locked: expenses and income dated in them can't be added or deleted.
 
 ## Getting started
 
@@ -84,32 +80,29 @@ repo root.
 cd savings-society
 npm install
 cp .env.example .env        # set AUTH_SECRET to a long random string
-npm run db:migrate           # creates prisma/dev.db
-npm run db:seed              # admin login + settings + 4 demo members
+npm run db:migrate          # creates prisma/dev.db and seeds demo data
 npm run dev
 ```
 
 - Admin: `01700000000` (or `admin@society.local`) / `ChangeMe123!`
-- Demo member: `01711111111` / `Member123!`. Other demo phones are
-  01722222222, 01733333333 and 01744444444.
+- Demo member (Rahim Ahmed): `01711111111` / `Member123!` (all 24 demo members use `Member123!`)
 
-Set `SEED_DEMO=0` to skip the demo members, and change the admin password
-before real use. On a phone, open the site and choose **Add to Home Screen**
-to install it.
+Set `SEED_DEMO=0` to skip the demo data, and change the admin password before real use.
 
 ## Deploying
 
 Run it on any host with a persistent disk (a VPS or Docker running
-`npm run build && npm start`). Uploaded proofs live in `storage/` and the
-database in `prisma/dev.db`, so **back both up**. For serverless hosts
-(Vercel), switch to Postgres (`provider` in `schema.prisma` plus
-`DATABASE_URL`) and move `src/lib/uploads.ts` to S3/R2.
+`npm run build && npm start`). Back up `storage/` and `prisma/dev.db`. For
+serverless hosts, switch Prisma to Postgres and move `src/lib/uploads.ts` to
+S3/R2.
 
-## Known limits / next steps
+## Known limits
 
-1. Changing the monthly amount re-prices *all* months, including past ones. If
-   the amount changes over time, add a dated rate table.
-2. Notifications (SMS/WhatsApp/email) when a payment is approved or a
-   member falls behind.
-3. Profit or interest distribution if the fund is invested.
-4. Multiple admins with roles (e.g. a treasurer who approves and a viewer).
+1. **No automatic WhatsApp/SMS.** Invites, reminders and notices open WhatsApp
+   with the message ready (`wa.me` links); the admin taps send. The admin
+   login's 6-digit WhatsApp code in the design needs a WhatsApp Business API
+   account, so it isn't built yet.
+2. **No QR code** on receipts yet — the verification code is printed instead.
+3. Changing the monthly amount re-prices every month, including past ones.
+4. Admins log in by email, so an admin can also keep a separate member account
+   on their phone number.

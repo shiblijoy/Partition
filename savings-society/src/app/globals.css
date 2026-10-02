@@ -1,17 +1,43 @@
 @import "tailwindcss";
 
-:root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-}
-
+/* Dreamhive palette: warm paper, deep green ink and accent. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --color-paper: #f4f3ee;
+  --color-ink: #14231c;
+  --color-muted: #5b6660;
+  --color-line: #e3e1d8;
+  --color-field: #d5d2c6;
+  --color-brand: #0f5e4a;
+  --color-brand-dark: #0a4536;
+  --color-brand-soft: #cfe6dd;
+  --color-good-bg: #ddefe7;
+  --color-good: #0b5340;
+  --color-warn-bg: #fcefd9;
+  --color-warn: #8a4b06;
+  --color-bad-bg: #fbe3df;
+  --color-bad: #9b2416;
+  --color-side: #24382f;
+  --font-sans: var(--font-jakarta), "Segoe UI", system-ui, sans-serif;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
+@layer base {
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* In the base layer so utilities like text-white on a link still win. */
+  a {
+    color: var(--color-brand);
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
 }

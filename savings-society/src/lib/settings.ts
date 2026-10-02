@@ -12,7 +12,8 @@ export async function getSettings() {
 
 export type Settings = Awaited<ReturnType<typeof getSettings>>;
 
+/** "৳ 17,00,000" — taka amounts use lakh/crore grouping. */
 export function money(amount: number, symbol: string): string {
-  const formatted = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(Math.abs(amount));
-  return `${amount < 0 ? "-" : ""}${symbol}${formatted}`;
+  const formatted = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(Math.round(Math.abs(amount)));
+  return `${amount < 0 ? "−\u00a0" : ""}${symbol}\u00a0${formatted}`; // non-breaking: "৳" never wraps away from the number
 }

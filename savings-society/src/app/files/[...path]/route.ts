@@ -5,7 +5,8 @@ import { readStoredFile } from "@/lib/uploads";
 /**
  * Serves uploaded payment proofs and expense receipts.
  * - proofs/<memberId>/…: the admin, or the member who uploaded it.
- * - receipts/…: any signed-in user (members can see what the fund was spent on).
+ * - receipts/…, documents/…, notices/…: any signed-in user (open books, asset papers, notice attachments).
+ * - anything else (income statements, bank statements): the admin only.
  */
 export async function GET(_req: Request, ctx: RouteContext<"/files/[...path]">) {
   const { path } = await ctx.params;
@@ -20,7 +21,9 @@ export async function GET(_req: Request, ctx: RouteContext<"/files/[...path]">) 
   const allowed =
     user.role === "ADMIN" ||
     (folder === "proofs" && owner === session.userId) ||
-    folder === "receipts";
+    folder === "receipts" ||
+    folder === "documents" ||
+    folder === "notices";
   if (!allowed) return new Response("Forbidden", { status: 403 });
 
   const file = await readStoredFile(relPath);

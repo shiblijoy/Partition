@@ -39,3 +39,9 @@ export function monthLabel(key: string, style: "short" | "long" = "short"): stri
     year: "numeric",
   });
 }
+
+/** Last moment of a month. */
+export function monthEnd(key: string): Date {
+  const [y, m] = key.split("-").map(Number);
+  return new Date(y, m, 0, 23, 59, 59, 999);
+}

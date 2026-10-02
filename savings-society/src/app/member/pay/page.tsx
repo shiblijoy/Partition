@@ -3,42 +3,41 @@ import { requireMember } from "@/lib/auth-guard";
 import { getSettings, money } from "@/lib/settings";
 import { memberLedger } from "@/lib/ledger";
 import { approvedTotalFor } from "@/lib/society";
-import { addMonths } from "@/lib/months";
-import { Card, PageHeader } from "@/components/ui";
+import { addMonths, monthLabel } from "@/lib/months";
+import { dateInput } from "@/lib/format";
+import { ScreenHeader } from "@/components/ui";
 import { PayForm } from "./PayForm";
 
 export default async function PayPage() {
   const session = await requireMember();
-  const [settings, member, approvedTotal] = await Promise.all([
+  const [settings, member, approvedTotal, pending] = await Promise.all([
     getSettings(),
     prisma.user.findUniqueOrThrow({ where: { id: session.userId } }),
     approvedTotalFor(session.userId),
+    prisma.payment.findMany({ where: { memberId: session.userId, status: "PENDING" } }),
   ]);
   const ledger = memberLedger(member, approvedTotal, settings);
 
-  // Suggest the first month not yet covered, and the amount that clears what's owed.
-  const nextMonth = ledger.paidThrough ? addMonths(ledger.paidThrough, 1) : ledger.firstMonth;
-  const suggestedAmount = ledger.due > 0 ? ledger.due : settings.monthlyAmount;
+  // Offer the months not yet covered by approved or pending money, oldest first.
+  const pendingMonths = pending.reduce((n, p) => n + p.monthsCount, 0);
+  const firstOpen = addMonths(ledger.paidThrough ? addMonths(ledger.paidThrough, 1) : ledger.firstMonth, pendingMonths);
+  const months = Array.from({ length: 6 }, (_, i) => addMonths(firstOpen, i)).map((key) => ({
+    key,
+    label: monthLabel(key),
+    due: ledger.statusFor(key) === "due",
+  }));
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <PageHeader
-        title="Submit a payment"
-        subtitle={`Monthly deposit: ${money(settings.monthlyAmount, settings.currencySymbol)}. The admin will check the proof and approve it.`}
+    <div>
+      <ScreenHeader title="Submit payment" back="/member" />
+      <PayForm
+        months={months}
+        monthly={settings.monthlyAmount}
+        currency={settings.currencySymbol}
+        monthlyLabel={money(settings.monthlyAmount, settings.currencySymbol)}
+        paymentInfo={settings.paymentInfo}
+        today={dateInput()}
       />
-      {settings.paymentInfo && (
-        <div className="mb-4 whitespace-pre-line rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">
-          <p className="mb-1 font-semibold">Where to send money</p>
-          {settings.paymentInfo}
-        </div>
-      )}
-      <Card>
-        <PayForm
-          defaultMonth={nextMonth}
-          defaultAmount={suggestedAmount}
-          today={new Date().toISOString().slice(0, 10)}
-        />
-      </Card>
     </div>
   );
 }

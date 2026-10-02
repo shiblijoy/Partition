@@ -21,12 +21,12 @@ const CONTENT_TYPES: Record<string, string> = Object.fromEntries(
 export class UploadError extends Error {}
 
 /** Saves an upload under storage/<folder>/ and returns its relative path, e.g. "proofs/<userId>/<uuid>.jpg". */
-export async function saveFile(folder: string, file: File): Promise<string> {
+export async function saveFile(folder: string, file: File, maxBytes = MAX_FILE_BYTES): Promise<string> {
   if (!(file instanceof File) || file.size === 0) {
     throw new UploadError("No file provided.");
   }
-  if (file.size > MAX_FILE_BYTES) {
-    throw new UploadError(`"${file.name}" is larger than 10MB.`);
+  if (file.size > maxBytes) {
+    throw new UploadError(`"${file.name}" is larger than ${Math.round(maxBytes / 1024 / 1024)}MB.`);
   }
   const ext = ALLOWED_TYPES[file.type];
   if (!ext) {
