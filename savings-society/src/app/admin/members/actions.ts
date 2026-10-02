@@ -11,6 +11,7 @@ import { getSettings, money } from "@/lib/settings";
 import { isMonthKey } from "@/lib/months";
 import { whatsappLink } from "@/lib/format";
 import { audit } from "@/lib/audit";
+import { EDITABLE_FIELDS, FIELD_LABELS, parseChanges, validateField, type EditableField } from "@/lib/profile-fields";
 import { newVerifyCode, nextDepositReceiptNo } from "@/lib/receipts";
 import { saveFile, UploadError } from "@/lib/uploads";
 import type { FormState } from "@/components/ActionForm";
@@ -244,3 +245,35 @@ export async function closeRequest(requestId: string): Promise<void> {
   revalidatePath("/admin", "layout");
 }
 
+
+/** Applies a member's proposed edits to their details. */
+export async function approveDetailsChange(requestId: string): Promise<void> {
+  const admin = await requireAdmin();
+  const request = await prisma.memberRequest.findUnique({ where: { id: requestId }, include: { member: true } });
+  if (!request || request.status !== "OPEN" || !request.changes) return;
+  const changes = parseChanges(request.changes);
+  const data: Partial<Record<EditableField, string | null>> = {};
+  for (const field of Object.keys(changes) as EditableField[]) {
+    if (!EDITABLE_FIELDS.some(([f]) => f === field)) continue; // only the fields members may edit
+    const to = changes[field]?.to ?? null;
+    if (validateField(field, to)) continue;
+    data[field] = to;
+  }
+  await prisma.user.update({ where: { id: request.memberId }, data });
+  await prisma.memberRequest.update({ where: { id: requestId }, data: { status: "APPROVED", decidedAt: new Date() } });
+  // Field names only: the audit log shouldn't hold NID numbers.
+  await audit(admin.userId, "member.details_approved", `${admin.name} approved ${request.member.name}'s edit: ${Object.keys(data).map((f) => FIELD_LABELS[f as EditableField].toLowerCase()).join(", ")}`);
+  revalidateAll();
+}
+
+export async function rejectDetailsChange(requestId: string, _prev: FormState, formData: FormData): Promise<FormState> {
+  const admin = await requireAdmin();
+  const note = text(formData, "note");
+  if (!note) return { error: "Tell the member why, so they can fix it." };
+  const request = await prisma.memberRequest.findUnique({ where: { id: requestId }, include: { member: true } });
+  if (!request || request.status !== "OPEN") return { error: "This request has already been handled." };
+  await prisma.memberRequest.update({ where: { id: requestId }, data: { status: "REJECTED", adminNote: note, decidedAt: new Date() } });
+  await audit(admin.userId, "member.details_rejected", `${admin.name} rejected ${request.member.name}'s edit: ${note}`);
+  revalidateAll();
+  return { ok: "Rejected. The member sees your reason." };
+}

@@ -9,17 +9,27 @@ import { logout } from "@/app/login/actions";
 import { cancelWithdrawal } from "@/app/member/withdraw/actions";
 import { Icon } from "@/components/icons";
 import { ActionForm } from "@/components/ActionForm";
-import { Field, Notice, ScreenHeader, inputClass, secondaryButton } from "@/components/ui";
-import { requestAccountDeletion, requestDetailsChange } from "./actions";
+import { Field, Notice, ScreenHeader, inputClass, labelClass, primaryButton, secondaryButton, textareaClass } from "@/components/ui";
+import { EDITABLE_FIELDS, parseChanges } from "@/lib/profile-fields";
+import { ChangeList } from "@/components/ChangeList";
+import { cancelDetailsChange, proposeDetailsChange, requestAccountDeletion, requestDetailsChange } from "./actions";
 
 export default async function ProfilePage() {
   const session = await requireMember();
-  const [settings, member, fund, deletion] = await Promise.all([
+  const [settings, member, fund, deletion, lastEdit] = await Promise.all([
     getSettings(),
     prisma.user.findUniqueOrThrow({ where: { id: session.userId } }),
     fundSummary(),
     prisma.withdrawal.findFirst({ where: { memberId: session.userId, eraseData: true, status: { in: ["PENDING", "APPROVED"] } } }),
+    prisma.memberRequest.findFirst({
+      where: { memberId: session.userId, changes: { not: null } },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
+  const pendingEdit = lastEdit?.status === "OPEN" ? lastEdit : null;
+  const pendingChanges = parseChanges(pendingEdit?.changes ?? null);
+  // The form starts from what's waiting for approval, if anything, else the current details.
+  const formValue = (f: (typeof EDITABLE_FIELDS)[number][0]) => (f in pendingChanges ? pendingChanges[f]?.to : member[f]) ?? "";
   const position = await memberPosition(member.id, fund);
   const $ = (n: number) => money(n, settings.currencySymbol);
   const initials = member.name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
@@ -61,20 +71,53 @@ export default async function ProfilePage() {
             <div className="text-[13px] text-muted">{member.nomineePhone ?? "—"} · NID {mask(member.nomineeNid)}</div>
           </>
         ) : (
-          <div className="font-bold text-warn">No nominee yet — ask the admin to add one.</div>
+          <div className="font-bold text-warn">No nominee yet — add one under Edit my details.</div>
         )}
         <div className="text-xs text-muted">Receives your savings if something happens to you.</div>
       </div>
 
+      {pendingEdit && (
+        <div className="flex flex-col gap-3 rounded-2xl border-2 border-[#E8B567] bg-white p-4">
+          <div className="text-xs font-extrabold tracking-wide text-warn">WAITING FOR ADMIN APPROVAL</div>
+          <ChangeList changes={pendingChanges} />
+          <form action={cancelDetailsChange.bind(null, pendingEdit.id)}>
+            <button className="h-11 text-[13px] font-semibold text-muted underline">Cancel this change</button>
+          </form>
+        </div>
+      )}
+      {lastEdit?.status === "REJECTED" && (
+        <Notice tone="bad">The admin didn&apos;t accept your last edit{lastEdit.adminNote ? `: ${lastEdit.adminNote}` : "."}</Notice>
+      )}
+
       <details className="rounded-2xl border border-line bg-white">
         <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 text-sm font-bold">
-          Request a change to my details
+          {pendingEdit ? "Change my edit" : "Edit my details"}
           <Icon name="chevron" size={18} />
         </summary>
-        <div className="px-4 pb-4">
-          <ActionForm action={requestDetailsChange} submitLabel="Send to admin" buttonClass={`w-full ${secondaryButton}`} className="flex flex-col gap-3">
-            <textarea name="message" required rows={3} aria-label="What should change?" placeholder="e.g. New address: …, or change my nominee to …" className={`${inputClass} h-auto py-3`} />
+        <div className="flex flex-col gap-4 px-4 pb-4">
+          <p className="text-[13px] leading-relaxed text-muted">Your changes are sent to the admin and apply once they approve them.</p>
+          <ActionForm action={proposeDetailsChange} submitLabel="Send for approval" buttonClass={`w-full ${primaryButton}`} resetOnSuccess={false}>
+            {EDITABLE_FIELDS.map(([field, label]) => (
+              <div key={field}>
+                <label htmlFor={`p-${field}`} className={labelClass}>{label}</label>
+                <input
+                  id={`p-${field}`}
+                  name={field}
+                  defaultValue={formValue(field)}
+                  inputMode={field === "nid" || field === "nomineeNid" || field === "nomineePhone" ? "numeric" : undefined}
+                  autoComplete={field === "address" ? "street-address" : field === "dateOfBirth" ? "bday" : "off"}
+                  placeholder={field === "dateOfBirth" ? "e.g. 14 Mar 1988" : undefined}
+                  className={inputClass}
+                />
+              </div>
+            ))}
           </ActionForm>
+          <details>
+            <summary className="flex min-h-11 cursor-pointer list-none items-center text-[13px] font-bold text-brand">Name or mobile number wrong?</summary>
+            <ActionForm action={requestDetailsChange} submitLabel="Ask the admin" buttonClass={`w-full ${secondaryButton}`} className="mt-2 flex flex-col gap-3">
+              <textarea name="message" required rows={2} aria-label="What should change?" placeholder="Only the admin can change these, since your number is your login." className={textareaClass} />
+            </ActionForm>
+          </details>
         </div>
       </details>
 

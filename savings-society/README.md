@@ -23,7 +23,7 @@ from the design, waiting for the society's real details.
 | Investments & voting | Society totals, your profit share, open proposals with live yes/no tally and the votes needed; vote or change your vote. |
 | Withdraw | Leave the society or take out part of your savings, with the estimated settlement; tracker and cancel until approved. |
 | Payout receipt | The settlement breakdown; confirm "I received ৳…" or report a problem. |
-| Profile & nominee | Masked NID, nominee, request a change, account deletion (= full withdrawal, personal data erased after payout). |
+| Profile & nominee | Masked NID and nominee. Members edit their own date of birth, address, NID and nominee; changes apply only after the admin approves them (name and mobile number are changed by the admin). Account deletion (= full withdrawal, personal data erased after payout). |
 | Notices | Meetings (add to calendar), votes, reminders and decisions; opening the page marks them read. |
 | Asset documents / Society books | Read-only deeds and agreements by asset; open books of income and costs. |
 | Check a receipt | Enter a receipt's code to confirm the society issued it. |
@@ -32,7 +32,7 @@ from the design, waiting for the society's real details.
 
 | Screen | What it does |
 |---|---|
-| Dashboard | Fund balance, collection progress, approval queue with one-tap approve, unpaid members with WhatsApp reminder links, withdrawal and member requests. |
+| Dashboard | Fund balance, collection progress, approval queue with one-tap approve, unpaid members with WhatsApp reminder links, withdrawal requests, and members' detail edits (old → new) to approve or reject. |
 | Review proof | The uploaded proof, payment details, a three-point checklist before approving, required message when rejecting, then on to the next proof. |
 | Approvals | Pending / approved / rejected lists; undo or delete. |
 | Members | Withdrawal requests, member list with status (Active, Behind, Exiting, Left, Removed, Deceased) and search, add member with joining rule and temporary password + WhatsApp invite. |

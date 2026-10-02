@@ -10,14 +10,16 @@ import { ActionForm } from "@/components/ActionForm";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ProofLink } from "@/components/ProofLink";
 import { RecordPaymentForm } from "./RecordPaymentForm";
+import { PendingDetailsChange } from "@/components/PendingDetailsChange";
 import { markDeceased, removeMember, resetPassword, restoreMember, updateMember } from "../actions";
 
 export default async function MemberDetailPage({ params }: PageProps<"/admin/members/[id]">) {
   const { id } = await params;
-  const [settings, member, openWithdrawal] = await Promise.all([
+  const [settings, member, openWithdrawal, pendingEdit] = await Promise.all([
     getSettings(),
     prisma.user.findUnique({ where: { id }, include: { payments: { orderBy: { createdAt: "desc" } } } }),
     prisma.withdrawal.findFirst({ where: { memberId: id, status: { in: ["PENDING", "APPROVED"] } } }),
+    prisma.memberRequest.findFirst({ where: { memberId: id, status: "OPEN", changes: { not: null } }, include: { member: { select: { name: true } } } }),
   ]);
   if (!member || member.role !== "MEMBER") notFound();
 
@@ -99,6 +101,7 @@ export default async function MemberDetailPage({ params }: PageProps<"/admin/mem
 
       <div className="flex flex-wrap items-start gap-6">
         <div className="flex min-w-0 flex-[1_1_340px] flex-col gap-4">
+          {pendingEdit && <PendingDetailsChange request={pendingEdit} />}
           <Card title="Profile">
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               <Field label="NID">{mask(member.nid)}</Field>

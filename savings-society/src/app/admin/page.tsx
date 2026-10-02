@@ -9,6 +9,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { Card, Notice, PageHeader, StatCard, METHOD_LABELS, secondaryButton, smallButton, smallSecondary } from "@/components/ui";
 import { approvePayment } from "./payments/actions";
 import { closeRequest } from "./members/actions";
+import { PendingDetailsChange } from "@/components/PendingDetailsChange";
 
 export default async function AdminDashboard() {
   const settings = await getSettings();
@@ -52,7 +53,10 @@ export default async function AdminDashboard() {
               <Notice tone="bad">{w.member.name} reported a problem with their payout: {w.problemNote}</Notice>
             </Link>
           ))}
-          {requests.map((r) => (
+          {requests.filter((r) => r.changes).map((r) => (
+            <PendingDetailsChange key={r.id} request={r} showMember />
+          ))}
+          {requests.filter((r) => !r.changes).map((r) => (
             <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-4 py-3 text-[13px] ring-1 ring-line">
               <span>
                 <strong>{r.member.name}</strong> asks: {r.message}

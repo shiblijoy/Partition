@@ -119,7 +119,9 @@ enum AssetType {
 
 enum RequestStatus {
   OPEN
-  DONE
+  DONE // a free-text request the admin has dealt with
+  APPROVED // proposed detail changes applied
+  REJECTED // proposed detail changes turned down
 }
 
 model User {
@@ -365,13 +367,17 @@ model ReconLine {
   statementPath String?
 }
 
-// A member asking the admin for something the app can't do on its own, e.g. fix their details.
+// A member asking the admin for something: either free text, or edits to their own
+// details (`changes`) that only apply once the admin approves them.
 model MemberRequest {
   id        String        @id @default(cuid())
   member    User          @relation(fields: [memberId], references: [id], onDelete: Cascade)
   memberId  String
   message   String
+  changes   String? // JSON: { field: { from, to } } for a details edit
   status    RequestStatus @default(OPEN)
+  adminNote String? // why a change was rejected, shown to the member
+  decidedAt DateTime?
   createdAt DateTime      @default(now())
 }
 
