@@ -1,5 +1,8 @@
 # Green Pastures Farm — Farm Management App
 
+> This repo also contains a separate app, **[`savings-society/`](savings-society/README.md)**, for
+> monthly society deposits with payment-proof uploads and admin approval.
+
 A web app (mobile-friendly, installable as a home-screen app) for running a
 small livestock operation: track every cow, goat, lamb, and chicken, log
 their daily costs, see cost-to-date and a suggested selling price, and let

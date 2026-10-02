@@ -1,0 +1,103 @@
+// Prisma schema for the savings society app.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PaymentMethod {
+  BKASH
+  NAGAD
+  ROCKET
+  BANK
+  CASH
+  OTHER
+}
+
+enum ExpenseCategory {
+  BANK_CHARGE
+  TRANSFER_FEE
+  MEETING
+  STATIONERY
+  LEGAL
+  OTHER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  phone        String   @unique
+  email        String?  @unique
+  passwordHash String
+  role         Role     @default(MEMBER)
+  joinMonth    String   // "YYYY-MM": first month this member owes a deposit for
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  payments         Payment[] @relation("MemberPayments")
+  reviewedPayments Payment[] @relation("ReviewedPayments")
+  expenses         Expense[]
+}
+
+model Payment {
+  id         String        @id @default(cuid())
+  member     User          @relation("MemberPayments", fields: [memberId], references: [id], onDelete: Cascade)
+  memberId   String
+  forMonth   String        // "YYYY-MM" the member says this is for (a label; dues are worked out from the total)
+  amount     Float
+  method     PaymentMethod
+  reference  String?       // transaction ID / bank slip number
+  paidOn     DateTime
+  proofPath  String?       // relative path under /storage, served by /files/...
+  note       String?
+  status     PaymentStatus @default(PENDING)
+
+  reviewedBy   User?     @relation("ReviewedPayments", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNote   String?   // shown to the member, e.g. why it was rejected
+
+  createdAt DateTime @default(now())
+
+  @@index([memberId])
+  @@index([status])
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  date        DateTime
+  category    ExpenseCategory
+  amount      Float
+  description String
+  receiptPath String?
+  createdBy   User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime        @default(now())
+
+  @@index([date])
+}
+
+// Single row (id = 1) holding society-wide settings.
+model Setting {
+  id             Int    @id @default(1)
+  societyName    String @default("Savings Society")
+  monthlyAmount  Float  @default(10000)
+  currencySymbol String @default("৳")
+  startMonth     String // "YYYY-MM": the society's first deposit month
+  paymentInfo    String? // shown on the member "Pay" screen, e.g. the bKash/bank account to send to
+}
