@@ -3,11 +3,11 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { PrismaClient, PaymentMethod } from "@prisma/client";
 import { hashPassword } from "../src/lib/password";
-import { addMonths, currentMonth, monthRange } from "../src/lib/months";
+import { addMonths, currentMonth, isMonthKey, monthRange } from "../src/lib/months";
 import { newVerifyCode } from "../src/lib/receipts";
 
 const prisma = new PrismaClient();
-const STORAGE = path.join(process.cwd(), "storage");
+const STORAGE = path.resolve(process.env.STORAGE_DIR || path.join(process.cwd(), "storage"));
 
 /** A one-page placeholder PDF, so demo documents open. */
 async function placeholderPdf(title: string, folder = "documents"): Promise<string> {
@@ -44,8 +44,10 @@ async function main() {
   const adminPhone = process.env.SEED_ADMIN_PHONE ?? "01700000000";
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@society.local";
   const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
+  const demo = process.env.SEED_DEMO !== "0";
   const now = currentMonth();
-  const startMonth = addMonths(now, -9);
+  // A real install starts from SEED_START_MONTH (or this month); the demo starts 9 months back.
+  const startMonth = isMonthKey(process.env.SEED_START_MONTH ?? "") ? process.env.SEED_START_MONTH! : demo ? addMonths(now, -9) : now;
 
   await prisma.setting.upsert({
     where: { id: 1 },
@@ -56,18 +58,30 @@ async function main() {
       monthlyAmount: 10000,
       currencySymbol: "৳",
       startMonth,
-      paymentInfo: "bKash (society): 01XXXXXXXXX\nBank: [Bank], A/C [number]",
-      cashAccounts: "[Bank] savings ••XXXX\nbKash (society number)\nCash with treasurer",
+      ...(demo
+        ? {
+            paymentInfo: "bKash (society): 01XXXXXXXXX\nBank: [Bank], A/C [number]",
+            cashAccounts: "[Bank] savings ••XXXX\nbKash (society number)\nCash with treasurer",
+          }
+        : {}),
     },
   });
 
   const admin = await prisma.user.upsert({
     where: { phone: adminPhone },
     update: {},
-    create: { name: "[Admin name]", phone: adminPhone, email: adminEmail, passwordHash: await hashPassword(adminPassword), role: "ADMIN", joinMonth: startMonth },
+    create: {
+      name: process.env.SEED_ADMIN_NAME ?? (demo ? "[Admin name]" : "Admin"),
+      phone: adminPhone,
+      email: adminEmail,
+      passwordHash: await hashPassword(adminPassword),
+      role: "ADMIN",
+      joinMonth: startMonth,
+      mustChangePassword: !demo, // a real install's first admin sets their own password at first login
+    },
   });
 
-  if ((await prisma.user.count({ where: { role: "MEMBER" } })) > 0 || process.env.SEED_DEMO === "0") {
+  if ((await prisma.user.count({ where: { role: "MEMBER" } })) > 0 || !demo) {
     console.log("Skipping demo data.");
   } else {
     const password = await hashPassword("Member123!");

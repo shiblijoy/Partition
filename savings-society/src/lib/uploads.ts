@@ -6,7 +6,7 @@ import { randomUUID } from "crypto";
  * Payment proofs are personal financial documents, so they're stored outside
  * /public and only served through the authenticated /files route.
  */
-export const STORAGE_ROOT = path.join(process.cwd(), "storage");
+export const STORAGE_ROOT = path.resolve(process.env.STORAGE_DIR || path.join(process.cwd(), "storage")); // STORAGE_DIR on a server, so data lives outside the code
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB — a full-resolution phone photo fits
 export const ALLOWED_TYPES: Record<string, string> = {
   "image/jpeg": "jpg",

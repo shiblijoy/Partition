@@ -91,10 +91,11 @@ Set `SEED_DEMO=0` to skip the demo data, and change the admin password before re
 
 ## Deploying
 
-Run it on any host with a persistent disk (a VPS or Docker running
-`npm run build && npm start`). Back up `storage/` and `prisma/dev.db`. For
-serverless hosts, switch Prisma to Postgres and move `src/lib/uploads.ts` to
-S3/R2.
+See **[DEPLOY.md](DEPLOY.md)** for a step-by-step guide to running it on a VPS
+with your own domain, HTTPS (Caddy) and nightly backups. The files it uses are in
+[`deploy/`](deploy/): a systemd service, a Caddyfile, `backup.sh` and `update.sh`.
+The database and uploads live outside the code (`DATABASE_URL`, `STORAGE_DIR`),
+so updates never touch the society's records.
 
 ## Known limits
 
