@@ -3,6 +3,9 @@
 > This repo also contains a separate app, **[Dreamhive](savings-society/README.md)** (in `savings-society/`),
 > for a savings society: monthly deposits with payment proofs and receipts, investments and voting,
 > withdrawals, notices, asset documents, month-end reconciliation and reports.
+>
+> It also contains **[Trading Analyzer](trading-analyzer/README.md)** (in `trading-analyzer/`): chart and
+> news analysis with backtested up/down probabilities, scenarios, and buy/sell/hold suggestions with risk.
 
 A web app (mobile-friendly, installable as a home-screen app) for running a
 small livestock operation: track every cow, goat, lamb, and chicken, log
