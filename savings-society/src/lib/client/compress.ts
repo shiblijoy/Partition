@@ -3,7 +3,9 @@
  * (longest side 1600 px, JPEG). PDFs and small images are left as they are.
  */
 export async function compressImage(file: File, maxBytes = 1_000_000, maxSide = 1600): Promise<File> {
-  if (!file.type.startsWith("image/") || file.size <= maxBytes) return file;
+  if (!file.type.startsWith("image/")) return file;
+  // Small JPEG/PNG/WebP go up as they are; any other image type (GIF, HEIC…) is converted to JPEG.
+  if (file.size <= maxBytes && ["image/jpeg", "image/png", "image/webp"].includes(file.type)) return file;
   try {
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));

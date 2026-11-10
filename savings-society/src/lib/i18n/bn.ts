@@ -92,6 +92,8 @@ export const BN: Record<string, string> = {
   "{amount} a month": "মাসে {amount}",
   "set by admin": "অ্যাডমিন নির্ধারিত",
   "Where to send money": "কোথায় টাকা পাঠাবেন",
+  "Camera or gallery": "ক্যামেরা বা গ্যালারি",
+  "Have a PDF bank statement? Choose a PDF file": "ব্যাংকের PDF আছে? PDF ফাইল বেছে নিন",
   "Select all {n} due months": "বকেয়া {n} মাস সব বেছে নিন",
   "Your bank account (bank, account name and number)": "আপনার ব্যাংক অ্যাকাউন্ট (ব্যাংক, অ্যাকাউন্টের নাম ও নম্বর)",
   "e.g. [Bank], [Your name], A/C [number]": "যেমন [ব্যাংক], [আপনার নাম], হিসাব নং [নম্বর]",

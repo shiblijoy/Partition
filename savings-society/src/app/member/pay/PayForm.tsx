@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useActionState, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { submitPayment } from "./actions";
 import type { PayState } from "./submit";
 import { Icon } from "@/components/icons";
@@ -35,6 +36,8 @@ export function PayForm({
   const [preview, setPreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [compressing, setCompressing] = useState(false);
+  // Android shows the photo gallery only when the picker asks for images alone, so a PDF is a separate choice.
+  const [pdfMode, setPdfMode] = useState(false);
   const [savedOffline, setSavedOffline] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -145,18 +148,24 @@ export function PayForm({
           )}
           <label
             htmlFor="proof"
+            onClick={(e) => {
+              if (!pdfMode || e.target === fileRef.current) return; // the input's own click bubbles up here
+              e.preventDefault(); // back to photos: switch the picker first, then open it
+              flushSync(() => setPdfMode(false));
+              fileRef.current?.click();
+            }}
             className="flex h-28 flex-1 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-[#B9B5A7] text-ink has-[:focus-visible]:ring-2"
           >
             <Icon name="camera" size={24} />
             <span className="text-sm font-semibold">{compressing ? t("Preparing photo…") : fileName ? t("Change photo") : t("Add photo")}</span>
-            <span className="text-xs text-muted">{t("Camera or gallery · JPEG, PNG or PDF")}</span>
+            <span className="text-xs text-muted">{t("Camera or gallery")}</span>
             <input
               ref={fileRef}
               id="proof"
               name="proof"
               type="file"
               required
-              accept="image/jpeg,image/png,image/webp,application/pdf"
+              accept={pdfMode ? "application/pdf" : "image/*"}
               className="sr-only"
               onChange={async (e) => {
                 const original = e.target.files?.[0];
@@ -175,6 +184,16 @@ export function PayForm({
             />
           </label>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            flushSync(() => setPdfMode(true)); // switch the picker to PDFs before opening it
+            fileRef.current?.click();
+          }}
+          className="self-start text-[13px] font-bold text-brand"
+        >
+          {t("Have a PDF bank statement? Choose a PDF file")}
+        </button>
       </div>
 
       <div>
