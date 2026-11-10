@@ -76,6 +76,7 @@ type SubmitInput = {
  * MonthSlot primary key (FR-PAY-07, BR-02).
  */
 async function createBatch(db: Db, settings: Settings, input: SubmitInput) {
+  if (input.method !== "BANK") throw new ServiceError("Only bank payments are accepted.");
   const months = [...new Set(input.months)].filter(isMonthKey).sort();
   if (months.length === 0) throw new ServiceError("Pick the month (or months) you're paying for.");
   const member = await db.user.findUniqueOrThrow({ where: { id: input.memberId } });
@@ -112,7 +113,7 @@ async function createBatch(db: Db, settings: Settings, input: SubmitInput) {
 }
 
 export async function submitPayments(settings: Settings, input: SubmitInput) {
-  if (input.method !== "CASH" && !input.reference) throw new ServiceError("Enter the transaction ID or reference so the admin can find it.");
+  if (!input.reference) throw new ServiceError("Enter the bank transaction ID or reference so the admin can find it.");
   return inTx((tx) => createBatch(tx, settings, input));
 }
 

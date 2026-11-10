@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ActionForm } from "@/components/ActionForm";
-import { fileClass, inputClass, labelClass, METHOD_LABELS } from "@/components/ui";
+import { fileClass, inputClass, labelClass } from "@/components/ui";
 import { recordPayment } from "../actions";
 import { AccountSelect, type AccountOption } from "@/components/AccountSelect";
 
@@ -26,7 +26,6 @@ export function RecordPaymentForm({
 }) {
   const [picked, setPicked] = useState<string[]>(months[0] ? [months[0].key] : []);
   const total = months.filter((m) => picked.includes(m.key)).reduce((s, m) => s + m.amount, 0);
-  const [method, setMethod] = useState("CASH");
 
   return (
     <ActionForm action={recordPayment.bind(null, memberId)} submitLabel="Record & issue receipts" resetOnSuccess={false}>
@@ -44,30 +43,20 @@ export function RecordPaymentForm({
           })}
         </div>
       </fieldset>
-      <fieldset>
-        <legend className={`${labelClass} mb-1.5`}>Method</legend>
-        <div className="flex flex-wrap gap-2">
-          {["CASH", "BKASH", "NAGAD", "BANK"].map((value) => (
-            <label key={value} className={chip(method === value)}>
-              <input type="radio" name="method" value={value} checked={method === value} onChange={() => setMethod(value)} className="sr-only" />
-              {METHOD_LABELS[value]}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <input type="hidden" name="method" value="BANK" />
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label htmlFor="paidOn" className={labelClass}>Date received</label>
           <input id="paidOn" name="paidOn" type="date" required defaultValue={today} max={today} className={inputClass} />
         </div>
         <div>
-          <label htmlFor="reference" className={labelClass}>Reference (optional)</label>
+          <label htmlFor="reference" className={labelClass}>Bank reference (optional)</label>
           <input id="reference" name="reference" className={inputClass} />
         </div>
         <AccountSelect accounts={accounts} label="Received into" id="rec-account" />
       </div>
       <div>
-        <label htmlFor="proof" className={labelClass}>Attach photo of cash receipt (optional)</label>
+        <label htmlFor="proof" className={labelClass}>Attach the bank slip (optional)</label>
         <input id="proof" name="proof" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className={fileClass} />
       </div>
       <div className="flex items-center justify-between rounded-xl bg-paper px-4 py-3 text-sm">

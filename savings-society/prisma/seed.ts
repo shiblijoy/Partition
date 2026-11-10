@@ -62,7 +62,7 @@ async function main() {
       societyName: "Dreamhive",
       currencySymbol: "৳",
       startMonth,
-      ...(demo ? { paymentInfo: "bKash (society): 01XXXXXXXXX\nBank: [Bank], A/C ending 4821" } : {}),
+      ...(demo ? { paymentInfo: "Bank: [Bank], [Branch]\nA/C name: Dreamhive Savings Society\nA/C ending 4821" } : {}),
     },
   });
   await prisma.monthlyRate.upsert({ where: { fromMonth: startMonth }, update: {}, create: { fromMonth: startMonth, amount: Number(process.env.SEED_MONTHLY_AMOUNT ?? 10000), createdBy: "setup" } });
@@ -71,7 +71,6 @@ async function main() {
       data: demo
         ? [
             { name: "[Bank] savings", type: "BANK", last4: "4821" },
-            { name: "bKash (society number)", type: "MOBILE_WALLET", last4: "7702" },
             { name: "Cash with treasurer", type: "CASH" },
           ]
         : [{ name: "Society bank account", type: "BANK" }],
@@ -99,7 +98,6 @@ async function main() {
     const settings = await getSettings();
     const actor = { id: admin.id, name: admin.name };
     const accounts = await prisma.account.findMany();
-    const acc = (method: PaymentMethod) => accounts.find((a) => a.type === (method === "BANK" ? "BANK" : method === "CASH" ? "CASH" : "MOBILE_WALLET"))!.id;
     const bank = accounts.find((a) => a.type === "BANK")!.id;
     const password = await hashPassword("Member123!");
     const names = [
@@ -111,10 +109,10 @@ async function main() {
     const behind: Record<string, number> = { "Mitu Chowdhury": 1 }; // …except Mitu, one month short
     const pendingNow = ["Rahim Ahmed", "Nusrat Jahan", "Kamal Hossain", "Farhana Akter", "Tanvir Islam"];
     const unpaidNow = ["Sabbir Rahman", "Mitu Chowdhury", "Arif Hasan", "Shirin Sultana", "Jahid Karim"];
-    const methods: PaymentMethod[] = ["BKASH", "BANK", "BKASH", "NAGAD"];
+    const methods: PaymentMethod[] = ["BANK"]; // the society accepts bank payments only
     const pay = async (memberId: string, month: string, method: PaymentMethod, reference: string, paidOn: Date, reviewed: Date) => {
       const [p] = await submitPayments(settings, { memberId, months: [month], method, reference, paidOn, proofPath: null, note: null });
-      await approvePayment(settings, p.id, { receivedOn: paidOn, accountId: acc(method), actor, at: reviewed });
+      await approvePayment(settings, p.id, { receivedOn: paidOn, accountId: bank, actor, at: reviewed });
     };
 
     // Expenses and investments are dated through the months, so they're recorded in date order with the deposits.
@@ -159,7 +157,7 @@ async function main() {
       if (k === 2) await addExpense(settings, { date: day(month, 15), category: "BANK_CHARGE", amount: 575, description: "Account maintenance fee", receiptPath: null, accountId: bank, actor });
       if (k === 6) await addExpense(settings, { date: day(month, 12), category: "STATIONERY", amount: 3600, description: "Member passbooks (24)", receiptPath: null, accountId: bank, actor });
       await addExpense(settings, { date: day(month, 27), category: "MEETING", amount: 1100, description: "Monthly meeting refreshments", receiptPath: null, accountId: bank, actor });
-      // The treasurer moves the month's bKash/Nagad and cash collections into the bank.
+      // Anything held outside the bank is moved into it at month end.
       for (const a of accounts.filter((x) => x.type !== "BANK")) {
         const held = await cashAt(prisma, undefined, a.id);
         if (held > 0) await transfer({ fromId: a.id, toId: bank, amount: held, date: day(month, 28), note: `${a.name} collections deposited at the bank`, actor });
@@ -190,16 +188,16 @@ async function main() {
         await submitPayments(settings, {
           memberId: m.id,
           months: [now],
-          method: m.name === "Rahim Ahmed" ? "BKASH" : methods[m.i % 4],
+          method: "BANK",
           reference: m.name === "Rahim Ahmed" ? "8KJ2M4XQ7P" : `PND${m.i}${now.replace("-", "")}`,
           paidOn: new Date(),
           proofPath: await placeholderPdf(`Payment screenshot from ${m.name}`, `proofs/${m.id}`),
-          note: m.name === "Farhana Akter" ? "Cash given to treasurer, receipt #112" : null,
+          note: m.name === "Farhana Akter" ? "Deposited at the branch counter, slip #112" : null,
         });
       } else if (!unpaidNow.includes(m.name)) {
-        await pay(m.id, now, methods[m.i % 4], `NOW${m.i}${now.replace("-", "")}`, day(now, 1), day(now, 1, 18));
+        await pay(m.id, now, "BANK", `NOW${m.i}${now.replace("-", "")}`, day(now, 1), day(now, 1, 18));
       }
-      if (m.name === "Arif Hasan") await prisma.withdrawal.create({ data: { memberId: m.id, kind: "FULL", payTo: `bKash ${m.phone}`, reason: "Moving abroad", createdAt: day(now, 1) } });
+      if (m.name === "Arif Hasan") await prisma.withdrawal.create({ data: { memberId: m.id, kind: "FULL", payTo: "[Bank], A/C ending 4821", reason: "Moving abroad", createdAt: day(now, 1) } });
     }
 
     // A vote in progress.

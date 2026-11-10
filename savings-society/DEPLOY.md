@@ -241,8 +241,8 @@ $1 a month; turning that on is a good extra safety net.
    send money, the second-admin limit, and your own WhatsApp number (for the
    login code). The monthly deposit is set there too; a change applies from a
    future month only.
-3. **Accounts & ledger:** add each account the society keeps money in (bank,
-   bKash/Nagad, cash in hand) with only its last 4 digits, and its balance on the
+3. **Accounts & ledger:** add each bank account the society keeps money in
+   (members pay by bank only) with only its last 4 digits, and its balance on the
    day you start using the app.
 4. **Enter past amounts** (deposits with *Record payment*, expenses, income)
    before using *Close month* — a closed month is locked.

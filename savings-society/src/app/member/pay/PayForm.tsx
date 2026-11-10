@@ -10,12 +10,6 @@ import { queuePayment } from "@/lib/client/offline-queue";
 import { useT } from "@/components/I18n";
 
 const initialState: PayState = {};
-const METHODS: Array<[string, string]> = [
-  ["BKASH", "bKash"],
-  ["NAGAD", "Nagad"],
-  ["BANK", "Bank"],
-  ["CASH", "Cash"],
-];
 
 const chip = (on: boolean) =>
   `flex h-11 cursor-pointer items-center justify-center rounded-xl bg-white px-3 text-sm has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand/40 ${
@@ -38,7 +32,6 @@ export function PayForm({
   const t = useT();
   const [state, formAction, pending] = useActionState(submitPayment, initialState);
   const [picked, setPicked] = useState<string[]>(months[0] ? [months[0].key] : []);
-  const [method, setMethod] = useState("BKASH");
   const [preview, setPreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [compressing, setCompressing] = useState(false);
@@ -120,22 +113,13 @@ export function PayForm({
         </div>
       )}
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className={`${labelClass} mb-2`}>{t("How did you pay?")}</legend>
-        <div className="grid grid-cols-4 gap-2">
-          {METHODS.map(([value, label]) => (
-            <label key={value} className={chip(method === value)}>
-              <input type="radio" name="method" value={value} checked={method === value} onChange={() => setMethod(value)} className="sr-only" />
-              {t(label)}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <input type="hidden" name="method" value="BANK" />
+      <p className="text-[13px] text-muted">{t("The society accepts bank payments only: a bank transfer or a deposit at the branch.")}</p>
 
       <div className="grid grid-cols-[1fr_auto] gap-3">
         <div>
-          <label htmlFor="reference" className={labelClass}>{method === "CASH" ? t("Receipt no. (optional)") : t("Transaction ID / reference")}</label>
-          <input id="reference" name="reference" required={method !== "CASH"} autoCapitalize="characters" className={inputClass} />
+          <label htmlFor="reference" className={labelClass}>{t("Bank transaction ID / reference")}</label>
+          <input id="reference" name="reference" required autoCapitalize="characters" className={inputClass} />
         </div>
         <div>
           <label htmlFor="paidOn" className={labelClass}>{t("Paid on")}</label>
@@ -144,7 +128,7 @@ export function PayForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <div className={labelClass}>{t("Proof (screenshot or receipt photo)")}</div>
+        <div className={labelClass}>{t("Proof (bank slip or transfer screenshot)")}</div>
         <div className="flex gap-2.5">
           {preview && (
             // eslint-disable-next-line @next/next/no-img-element -- local blob: preview, not a served image
@@ -189,7 +173,7 @@ export function PayForm({
 
       <div>
         <label htmlFor="note" className={labelClass}>{t("Note for admin (optional)")}</label>
-        <input id="note" name="note" placeholder={t("e.g. Sent from my brother's number")} className={inputClass} />
+        <input id="note" name="note" placeholder={t("e.g. Paid from my brother's account")} className={inputClass} />
       </div>
 
       {state.warning && (

@@ -13,10 +13,9 @@ export default async function WithdrawPage() {
   const viewer = await requireMember();
   const t = tFor(viewer.language);
   const lang = viewer.language;
-  const [settings, open, member, position] = await Promise.all([
+  const [settings, open, position] = await Promise.all([
     getSettings(),
     prisma.withdrawal.findFirst({ where: { memberId: viewer.userId, status: { in: ["PENDING", "APPROVED"] } }, orderBy: { createdAt: "desc" } }),
-    prisma.user.findUniqueOrThrow({ where: { id: viewer.userId } }),
     memberPosition(viewer.userId),
   ]);
   const $ = (n: number) => money(n, settings.currencySymbol);
@@ -72,7 +71,7 @@ export default async function WithdrawPage() {
           {t("The admin works out your final amount, including any profit share, when they approve the request.")}
         </p>
       </div>
-      {viewer.readOnly ? <Notice tone="neutral">{t("Your membership has ended, so your account is read-only.")}</Notice> : <WithdrawForm defaultPayTo={member.phone} currency={settings.currencySymbol} />}
+      {viewer.readOnly ? <Notice tone="neutral">{t("Your membership has ended, so your account is read-only.")}</Notice> : <WithdrawForm currency={settings.currencySymbol} />}
     </div>
   );
 }

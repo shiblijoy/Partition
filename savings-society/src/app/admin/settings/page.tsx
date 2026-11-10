@@ -75,9 +75,9 @@ export default async function SettingsPage() {
               </fieldset>
               <div>
                 <label htmlFor="paymentInfo" className={labelClass}>Where members should send money</label>
-                <textarea id="paymentInfo" name="paymentInfo" rows={3} defaultValue={settings.paymentInfo ?? ""} placeholder={"bKash (society): 01XXXXXXXXX\nBank: [Bank], A/C ending [4 digits]"} className={textareaClass} />
+                <textarea id="paymentInfo" name="paymentInfo" rows={3} defaultValue={settings.paymentInfo ?? ""} placeholder={"Bank: [Bank name], [Branch]\nA/C name: [Society name]\nA/C ending [4 digits]"} className={textareaClass} />
               </div>
-              <p className="text-[13px] text-muted">Society accounts (bank, bKash, cash) are managed on <a href="/admin/accounts">Accounts &amp; ledger</a>.</p>
+              <p className="text-[13px] text-muted">Society accounts are managed on <a href="/admin/accounts">Accounts &amp; ledger</a>.</p>
             </ActionForm>
           </Card>
 

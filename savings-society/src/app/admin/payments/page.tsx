@@ -34,7 +34,7 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/admin/p
 
   return (
     <div>
-      <PageHeader title="Approvals" subtitle="Check each proof against the bank or bKash statement, then approve once the money has arrived." />
+      <PageHeader title="Approvals" subtitle="Check each proof against the bank statement, then approve once the money has arrived." />
 
       <nav className="mb-4 flex gap-1 overflow-x-auto rounded-xl bg-line p-1 text-sm" aria-label="Filter">
         {TABS.map((t) => (
