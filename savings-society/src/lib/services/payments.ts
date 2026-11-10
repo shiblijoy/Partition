@@ -34,7 +34,8 @@ async function batchOf(db: Db, paymentId: string) {
 }
 
 /** Months a member can still submit for: from their first month, not yet pending or approved (up to a year ahead). */
-export async function openMonths(memberId: string, settings: Settings, count = 12): Promise<string[]> {
+/** Every month the member can still pay: all unpaid months since they joined, and up to 12 months ahead. */
+export async function openMonths(memberId: string, settings: Settings, count = Infinity): Promise<string[]> {
   const member = await prisma.user.findUniqueOrThrow({ where: { id: memberId } });
   const taken = new Set((await prisma.monthSlot.findMany({ where: { memberId }, select: { month: true } })).map((s) => s.month));
   const first = firstMonthOf(member, settings.startMonth);

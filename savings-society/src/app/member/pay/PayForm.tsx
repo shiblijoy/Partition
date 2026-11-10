@@ -38,6 +38,7 @@ export function PayForm({
   const [savedOffline, setSavedOffline] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const dueKeys = months.filter((m) => m.due).map((m) => m.key);
   const totalAmount = months.filter((m) => picked.includes(m.key)).reduce((s, m) => s + m.amount, 0);
   const total = new Intl.NumberFormat("en-IN").format(totalAmount);
 
@@ -75,6 +76,11 @@ export function PayForm({
     >
       <fieldset className="flex flex-col gap-2">
         <legend className={`${labelClass} mb-2`}>{t("Paying for · pick one or more months")}</legend>
+        {dueKeys.length > 1 && (
+          <button type="button" onClick={() => setPicked([...new Set([...picked, ...dueKeys])].sort())} className="mb-1 self-start text-[13px] font-bold text-brand">
+            {t("Select all {n} due months", { n: dueKeys.length })}
+          </button>
+        )}
         <div className="flex flex-wrap gap-2">
           {months.map((m) => {
             const on = picked.includes(m.key);
