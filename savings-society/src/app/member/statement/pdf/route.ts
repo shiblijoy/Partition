@@ -9,6 +9,6 @@ export async function GET(req: Request) {
   const year = Number(params.get("year")) || new Date().getFullYear();
   const memberId = session.role === "MEMBER" ? session.userId : params.get("member");
   if (!memberId) return new Response("Choose a member", { status: 400 });
-  const bytes = await statementPdf(memberId, year);
+  const bytes = await statementPdf(memberId, year, session.role !== "MEMBER");
   return new Response(new Uint8Array(bytes), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="statement-${year}.pdf"` } });
 }

@@ -20,7 +20,7 @@ export default async function PayoutPage({ params }: PageProps<"/member/payouts/
   return (
     <div className="flex flex-col gap-3">
       <div className="no-print"><ScreenHeader title={t("Payout receipt")} back="/member/history" /></div>
-      <PayoutReceipt withdrawal={withdrawal} member={withdrawal.member} settings={settings} lang={viewer.language} />
+      <PayoutReceipt withdrawal={withdrawal} member={withdrawal.member} settings={settings} lang={viewer.language} showProfit={false} />
       {withdrawal.status !== "PAID" && <p className="text-sm text-muted">{t("The admin hasn't sent the money yet. This receipt fills in once they do.")}</p>}
       {awaiting && (
         <div className="no-print flex flex-col gap-2">

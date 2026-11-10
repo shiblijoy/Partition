@@ -155,6 +155,8 @@ export async function memberPosition(memberId: string, fund?: FundSummary, db: D
     landShare: Math.round(f.landSharePerMember),
     // Built from the rounded parts, so a settlement adds up on paper.
     net: deposits - withdrawn + profitShare - costShare,
+    // What members are shown: profit is visible to admins and auditors only.
+    afterCosts: deposits - withdrawn - costShare,
   };
 }
 

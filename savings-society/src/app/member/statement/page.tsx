@@ -28,9 +28,8 @@ export default async function StatementPage({ searchParams }: PageProps<"/member
         ))}
         {s.payments.length === 0 && <p className="py-2 text-sm text-muted">{t("No approved deposits this year.")}</p>}
         <Line label={t("Deposits in {year}", { year })} value={$(s.deposits)} total />
-        <Line label={t("+ Profit share")} value={`+ ${$(s.profitShare)}`} tone="good" />
         <Line label={t("− Cost share")} value={`− ${$(s.costShare)}`} tone="bad" />
-        <Line label={t("Net value today")} value={$(s.position.net)} total />
+        <Line label={t("All-time deposits after costs")} value={$(s.position.afterCosts)} total />
       </div>
       <a href={`/member/statement/pdf?year=${year}`} target="_blank" rel="noopener" className={`${primaryButton} no-underline`}>{t("Download PDF")}</a>
     </div>

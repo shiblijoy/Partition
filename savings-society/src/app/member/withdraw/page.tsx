@@ -66,14 +66,11 @@ export default async function WithdrawPage() {
         <h2 className="pb-1.5 text-[13px] font-bold">{t("Estimated settlement if you leave")}</h2>
         <Line label={t("My deposits")} value={$(position.deposits)} />
         {position.withdrawn > 0 && <Line label={t("− Already withdrawn")} value={`− ${$(position.withdrawn)}`} tone="bad" />}
-        <Line label={t("+ Profit share")} value={`+ ${$(position.profitShare)}`} tone="good" />
         <Line label={t("− Cost share")} value={`− ${$(position.costShare)}`} tone="bad" />
-        <Line label={t("You receive")} value={$(position.net)} total />
-        {position.landShare > 0 && (
-          <p className="pt-1.5 text-xs leading-snug text-muted">
-            {t("Plus your share of land and share gains (about {amount}), decided by the admin: paid now or when the asset is sold.", { amount: $(position.landShare) })}
-          </p>
-        )}
+        <Line label={t("Deposits after costs")} value={$(position.afterCosts)} total />
+        <p className="pt-1.5 text-xs leading-snug text-muted">
+          {t("The admin works out your final amount, including any profit share, when they approve the request.")}
+        </p>
       </div>
       {viewer.readOnly ? <Notice tone="neutral">{t("Your membership has ended, so your account is read-only.")}</Notice> : <WithdrawForm defaultPayTo={member.phone} currency={settings.currencySymbol} />}
     </div>

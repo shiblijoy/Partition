@@ -192,6 +192,8 @@ test("a deceased member's settlement is paid to the nominee and frozen on approv
   const approved = await prisma.withdrawal.findUniqueOrThrow({ where: { id: w.id } });
   const pos = await memberPosition(id);
   assert.equal(approved.payable, pos.deposits + pos.profitShare - pos.costShare);
+  // Members are shown deposits after costs only; the profit share stays with admins and auditors.
+  assert.equal(pos.afterCosts, pos.deposits - pos.withdrawn - pos.costShare);
   // Later costs don't change a frozen settlement.
   await books.addExpense(s, { date: new Date(), category: "OTHER", amount: 2400, description: "After", receiptPath: null, accountId: bank, actor: admin });
   assert.equal((await prisma.withdrawal.findUniqueOrThrow({ where: { id: w.id } })).payable, approved.payable);
