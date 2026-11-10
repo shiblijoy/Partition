@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { routeAdmin } from "@/lib/admin-route";
+import { routeStaff } from "@/lib/admin-route";
 import { isMonthKey, monthLabel } from "@/lib/months";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 import { buildReport, memberStatement, monthReport, periodReport } from "../data";
+import { memberPosition } from "@/lib/society";
 
 function csvCell(value: string | number): string {
   const s = String(value);
@@ -21,7 +22,7 @@ function csv(rows: Array<Array<string | number>>, filename: string): Response {
 
 /** CSV versions of the reports, for Excel or Google Sheets. */
 export async function GET(req: Request) {
-  if (!(await routeAdmin())) return new Response("Forbidden", { status: 403 });
+  if (!(await routeStaff())) return new Response("Forbidden", { status: 403 });
 
   const params = new URL(req.url).searchParams;
   const type = params.get("type") ?? "grid";
@@ -79,14 +80,14 @@ export async function GET(req: Request) {
       [
         ["Member statement", member.name, member.phone],
         [],
-        ["Month", "Months covered", "Receipt", "Paid on", "Amount"],
-        ...member.payments.map((p) => [monthLabel(p.forMonth), p.monthsCount, p.receiptNo ?? "", fmtDate(p.paidOn), p.amount]),
+        ["Month", "Receipt", "Received on", "Amount"],
+        ...member.payments.map((p) => [monthLabel(p.forMonth), p.receipt?.receiptNo ?? "", fmtDate(p.receivedOn ?? p.paidOn), p.amount]),
         [],
-        ["Deposits", "", "", "", position.deposits],
-        ["Withdrawn", "", "", "", -position.withdrawn],
-        ["Profit share", "", "", "", Math.round(position.profitShare)],
-        ["Cost share", "", "", "", -Math.round(position.costShare)],
-        ["Net value", "", "", "", Math.round(position.net)],
+        ["Deposits", "", "", position.deposits],
+        ["Withdrawn", "", "", -position.withdrawn],
+        ["Profit share", "", "", position.profitShare],
+        ["Cost share", "", "", -position.costShare],
+        ["Net value", "", "", position.net],
       ],
       `statement-${member.name.replace(/\W+/g, "-").toLowerCase()}`
     );
@@ -97,20 +98,22 @@ export async function GET(req: Request) {
     if (!isMonthKey(month)) return new Response("Bad month", { status: 400 });
     const [y, m] = month.split("-").map(Number);
     const entries = await prisma.auditLog.findMany({ where: { createdAt: { gte: new Date(y, m - 1, 1), lt: new Date(y, m, 1) } }, orderBy: { createdAt: "asc" } });
-    return csv([["When", "Action", "Detail"], ...entries.map((e) => [fmtDateTime(e.createdAt), e.action, e.detail])], `audit-${month}`);
+    return csv([["When", "Action", "Detail", "Record", "Before", "After", "IP", "Device"], ...entries.map((e) => [fmtDateTime(e.createdAt), e.action, e.detail, e.entity ?? "", e.before ?? "", e.after ?? "", e.ip ?? "", e.device ?? ""])], `audit-${month}`);
   }
 
   const { months, members, fund } = await buildReport(120);
-  const header = ["Member", "Phone", "Deposited", "Expected", "Due", "Paid ahead", "Cost share", "Profit share", ...months];
-  const rows = members.map((m) => [
+  const positions = await Promise.all(members.map((m) => memberPosition(m.id, fund)));
+  const header = ["Member", "Phone", "Deposited", "Expected", "Due", "Paid ahead", "Cost share", "Profit share", "Net value", ...months];
+  const rows = members.map((m, i) => [
     m.name,
     m.phone,
     m.ledger.paid,
     m.ledger.expected,
     m.ledger.due,
     m.ledger.advance,
-    Math.round(fund.expenseSharePerMember),
-    Math.round(fund.profitSharePerMember),
+    positions[i].costShare,
+    positions[i].profitShare,
+    positions[i].net,
     ...months.map((month) => m.ledger.statusFor(month)),
   ]);
   return csv([header, ...rows], `deposits-${new Date().toISOString().slice(0, 10)}`);

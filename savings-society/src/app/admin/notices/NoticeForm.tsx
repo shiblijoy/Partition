@@ -14,7 +14,7 @@ const KINDS: Array<[string, string]> = [
 const seg = (on: boolean) =>
   `flex min-h-11 flex-1 cursor-pointer items-center justify-center rounded-lg px-2 text-[13px] ${on ? "bg-white font-bold text-ink shadow-sm" : "font-semibold text-muted"}`;
 
-export function NoticeForm() {
+export function NoticeForm({ proposals }: { proposals: Array<{ id: string; name: string }> }) {
   const [kind, setKind] = useState("MEETING");
   return (
     <ActionForm action={postNotice} submitLabel="Post to all members">
@@ -46,8 +46,17 @@ export function NoticeForm() {
           </div>
         </div>
       )}
+      {proposals.length > 0 && (
+        <div>
+          <label htmlFor="n-inv" className={labelClass}>About a proposal or vote (optional)</label>
+          <select id="n-inv" name="investmentId" defaultValue="" className={inputClass}>
+            <option value="">—</option>
+            {proposals.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+      )}
       <div>
-        <label htmlFor="n-file" className={labelClass}>Attach file (minutes, photo, PDF)</label>
+        <label htmlFor="n-file" className={labelClass}>Attach file (agenda, photo, PDF)</label>
         <input id="n-file" name="attachment" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className={fileClass} />
       </div>
       <label className="flex min-h-11 items-center gap-3 text-sm font-semibold">

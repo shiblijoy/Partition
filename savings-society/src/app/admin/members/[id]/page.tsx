@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { requireStaff } from "@/lib/auth-guard";
 import { getSettings, money } from "@/lib/settings";
 import { memberLedger } from "@/lib/ledger";
-import { addMonths, currentMonth, monthLabel, monthRange } from "@/lib/months";
+import { memberPosition } from "@/lib/society";
+import { openAccounts } from "@/lib/books";
+import { openMonths } from "@/lib/services/payments";
+import { pii } from "@/lib/crypto";
+import { rateFor } from "@/lib/rates";
+import { currentMonth, monthLabel, monthRange } from "@/lib/months";
 import { dateInput, fmtDate, mask } from "@/lib/format";
 import { Badge, Card, Field, MonthCell, MonthLegend, Pill, fileClass, inputClass, labelClass, secondaryButton, smallSecondary, METHOD_LABELS } from "@/components/ui";
 import { ActionForm } from "@/components/ActionForm";
@@ -11,30 +17,36 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { ProofLink } from "@/components/ProofLink";
 import { RecordPaymentForm } from "./RecordPaymentForm";
 import { PendingDetailsChange } from "@/components/PendingDetailsChange";
-import { markDeceased, removeMember, resetPassword, restoreMember, updateMember } from "../actions";
+import { markDeceased, removeMember, resetPassword, restoreMember, unlockAccount, updateMember } from "../actions";
 
 export default async function MemberDetailPage({ params }: PageProps<"/admin/members/[id]">) {
+  const viewer = await requireStaff();
+  const canEdit = viewer.role === "ADMIN";
   const { id } = await params;
-  const [settings, member, openWithdrawal, pendingEdit] = await Promise.all([
+  const [settings, raw, openWithdrawal, pendingEdit, accounts, position] = await Promise.all([
     getSettings(),
-    prisma.user.findUnique({ where: { id }, include: { payments: { orderBy: { createdAt: "desc" } } } }),
+    prisma.user.findUnique({ where: { id }, include: { payments: { orderBy: [{ createdAt: "desc" }, { forMonth: "desc" }], include: { receipt: true } } } }),
     prisma.withdrawal.findFirst({ where: { memberId: id, status: { in: ["PENDING", "APPROVED"] } } }),
     prisma.memberRequest.findFirst({ where: { memberId: id, status: "OPEN", changes: { not: null } }, include: { member: { select: { name: true } } } }),
+    openAccounts(),
+    memberPosition(id),
   ]);
-  if (!member || member.role !== "MEMBER") notFound();
+  if (!raw || raw.role !== "MEMBER") notFound();
+  const member = { ...raw, ...pii(raw) };
 
   const $ = (n: number) => money(n, settings.currencySymbol);
-  const approvedTotal = member.payments.filter((p) => p.status === "APPROVED").reduce((s, p) => s + p.amount, 0);
-  const pendingMonths = member.payments.filter((p) => p.status === "PENDING").reduce((s, p) => s + p.monthsCount, 0);
-  const ledger = memberLedger(member, approvedTotal, settings);
+  const pendingList = member.payments.filter((p) => p.status === "PENDING");
+  const ledger = memberLedger(member, member.payments.filter((p) => p.status === "APPROVED"), settings, { pending: pendingList.map((p) => p.forMonth) });
+  const pendingMonths = pendingList.length;
   const now = currentMonth();
   const year = now.slice(0, 4);
   const months = monthRange(`${year}-01`, `${year}-12`);
-  const firstOpen = ledger.paidThrough ? addMonths(ledger.paidThrough, 1) : ledger.firstMonth;
-  const recordable = Array.from({ length: 6 }, (_, i) => addMonths(firstOpen, i)).map((key) => ({
+  const recordable = (await openMonths(member.id, settings, 8)).map((key) => ({
     key,
+    amount: rateFor(key, settings.rates),
     label: `${monthLabel(key)}${ledger.statusFor(key) === "due" ? " (due)" : key > now ? " (advance)" : ""}`,
   }));
+  const locked = member.lockedUntil && member.lockedUntil > new Date();
   const gone = !!member.exit || !member.active;
   const status = member.exit ?? (!member.active ? "DECEASED" : openWithdrawal ? "EXITING" : "ACTIVE");
 
@@ -52,7 +64,10 @@ export default async function MemberDetailPage({ params }: PageProps<"/admin/mem
           </p>
         </div>
         <div className="flex flex-wrap items-start gap-2">
-          {!gone && (
+          {canEdit && locked && (
+            <form action={unlockAccount.bind(null, member.id)}><button className={secondaryButton}>Unlock account (locked after wrong passwords)</button></form>
+          )}
+          {canEdit && !gone && (
             <details className="relative">
               <summary className={`${secondaryButton} cursor-pointer list-none`}>Reset password</summary>
               <div className="absolute right-0 z-10 mt-2 w-80 rounded-2xl border border-line bg-white p-4 shadow-lg">
@@ -62,7 +77,7 @@ export default async function MemberDetailPage({ params }: PageProps<"/admin/mem
               </div>
             </details>
           )}
-          {gone ? (
+          {!canEdit ? null : gone ? (
             <ConfirmButton action={restoreMember.bind(null, member.id)} confirmText={`Restore ${member.name} as an active member?`} className={secondaryButton}>
               Restore
             </ConfirmButton>
@@ -101,7 +116,17 @@ export default async function MemberDetailPage({ params }: PageProps<"/admin/mem
 
       <div className="flex flex-wrap items-start gap-6">
         <div className="flex min-w-0 flex-[1_1_340px] flex-col gap-4">
-          {pendingEdit && <PendingDetailsChange request={pendingEdit} />}
+          {pendingEdit && <PendingDetailsChange request={pendingEdit} canEdit={canEdit} />}
+          <Card title="Account">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <Field label="Deposits">{$(position.deposits)}</Field>
+              <Field label="Net value">{$(position.net)}</Field>
+              <Field label="Profit share">+&nbsp;{$(position.profitShare)}</Field>
+              <Field label="Cost share">−&nbsp;{$(position.costShare)}</Field>
+              <Field label="Joining rule">{member.joiningRule === "PAY_BACK" ? (member.caughtUpAt ? "Paid back · founding member" : "Paying back past months") : "Start fresh"}</Field>
+              <Field label="Statement"><a href={`/member/statement/pdf?member=${member.id}&year=${year}`} target="_blank" rel="noopener">{year} PDF</a></Field>
+            </div>
+          </Card>
           <Card title="Profile">
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               <Field label="NID">{mask(member.nid)}</Field>
@@ -115,7 +140,7 @@ export default async function MemberDetailPage({ params }: PageProps<"/admin/mem
             </div>
           </Card>
 
-          <Card>
+          {canEdit && <Card>
             <details>
               <summary className="cursor-pointer list-none text-base font-extrabold">Edit details</summary>
               <div className="mt-4">
@@ -147,7 +172,7 @@ export default async function MemberDetailPage({ params }: PageProps<"/admin/mem
                 </ActionForm>
               </div>
             </details>
-          </Card>
+          </Card>}
         </div>
 
         <div className="flex min-w-0 flex-[2_1_520px] flex-col gap-4">
@@ -159,16 +184,16 @@ export default async function MemberDetailPage({ params }: PageProps<"/admin/mem
             </div>
             <MonthLegend />
             <p className="mt-2 text-sm">
-              Approved deposits <strong>{$(ledger.paid)}</strong> · due <strong className={ledger.due > 0 ? "text-bad" : ""}>{$(ledger.due)}</strong>
+              Approved deposits <strong>{$(ledger.paid)}</strong> · {ledger.monthsPaid} of {ledger.monthsOwed} months · due <strong className={ledger.due > 0 ? "text-bad" : ""}>{$(ledger.due)}</strong>
               {ledger.advance > 0 && <> · paid ahead <strong>{$(ledger.advance)}</strong></>}
               {pendingMonths > 0 && <span className="text-warn"> · {pendingMonths} month(s) waiting for approval</span>}
             </p>
           </Card>
 
-          {!gone && (
+          {canEdit && !gone && recordable.length > 0 && (
             <Card title="Record payment for this member">
-              <p className="mb-3 text-[13px] text-muted">For cash handed to you, or a member who doesn&apos;t use the app. Approved at once, with receipts.</p>
-              <RecordPaymentForm memberId={member.id} months={recordable} monthly={settings.monthlyAmount} currency={settings.currencySymbol} today={dateInput()} />
+              <p className="mb-3 text-[13px] text-muted">For cash handed to you, or a member who doesn&apos;t use the app. Approved at once, marked &ldquo;Recorded by admin&rdquo;, with a receipt per month. Months already paid or waiting are left out.</p>
+              <RecordPaymentForm memberId={member.id} months={recordable} currency={settings.currencySymbol} today={dateInput()} accounts={accounts} />
             </Card>
           )}
 
@@ -181,15 +206,17 @@ export default async function MemberDetailPage({ params }: PageProps<"/admin/mem
                   <li key={p.id} className="flex items-center gap-3 border-b border-[#EFEDE6] py-2.5 last:border-0">
                     <ProofLink path={p.proofPath} size={44} />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold">{$(p.amount)} · {monthLabel(p.forMonth)}{p.monthsCount > 1 && ` +${p.monthsCount - 1}`}</p>
+                      <p className="text-sm font-bold">{$(p.amount)} · {monthLabel(p.forMonth)}</p>
                       <p className="text-xs text-muted">
-                        {METHOD_LABELS[p.method]} · {fmtDate(p.paidOn)}
+                        {METHOD_LABELS[p.method]} · paid {fmtDate(p.paidOn)}
+                        {p.receivedOn && ` · received ${fmtDate(p.receivedOn)}`}
                         {p.reference && ` · ${p.reference}`}
-                        {p.reviewNote === "Recorded by admin" && " · recorded by admin"}
+                        {p.recordedBy && ` · recorded by ${p.recordedBy}`}
+                        {p.status === "REVERSED" && ` · reversed: ${p.reversalReason}`}
                       </p>
                     </div>
-                    {p.status === "APPROVED" && <Link href={`/admin/receipts/${p.id}`} className="text-[13px] font-bold">Receipt</Link>}
-                    {p.status === "PENDING" ? <Link href={`/admin/payments/${p.id}`} className={`${smallSecondary} no-underline`}>Review</Link> : <Badge label={p.status} />}
+                    {p.receipt && <Link href={`/admin/receipts/${p.id}`} className="text-[13px] font-bold">{p.receipt.receiptNo}</Link>}
+                    {p.status === "PENDING" ? <Link href={`/admin/payments/${p.id}`} className={`${smallSecondary} no-underline`}>Review</Link> : <Link href={`/admin/payments/${p.id}`} className="no-underline"><Badge label={p.status} /></Link>}
                   </li>
                 ))}
               </ul>

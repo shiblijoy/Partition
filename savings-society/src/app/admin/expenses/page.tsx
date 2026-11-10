@@ -1,22 +1,28 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { requireStaff } from "@/lib/auth-guard";
 import { getSettings, money } from "@/lib/settings";
 import { fundSummary, membersWithLedgers } from "@/lib/society";
+import { openAccounts, eligibleMemberIds } from "@/lib/books";
+import { rateFor } from "@/lib/rates";
 import { currentMonth, monthKey, monthLabel, monthRange } from "@/lib/months";
 import { dateInput, fmtDay } from "@/lib/format";
-import { Card, Empty, PageHeader, StatCard, fileClass, inputClass, labelClass, textareaClass, dangerLink, CATEGORY_LABELS } from "@/components/ui";
+import { Card, Empty, PageHeader, StatCard, dangerLink, CATEGORY_LABELS } from "@/components/ui";
 import { ActionForm } from "@/components/ActionForm";
-import { ConfirmButton } from "@/components/ConfirmButton";
 import { ProofLink } from "@/components/ProofLink";
-import { addExpense, deleteExpense } from "./actions";
+import { ExpenseForm } from "./ExpenseForm";
+import { reverse } from "./actions";
 
 export default async function ExpensesPage() {
+  const viewer = await requireStaff();
   const settings = await getSettings();
-  const [fund, members, expenses, closed] = await Promise.all([
+  const [fund, members, expenses, closed, accounts, eligible] = await Promise.all([
     fundSummary(),
     membersWithLedgers(settings),
     prisma.expense.findMany({ orderBy: { date: "desc" }, include: { createdBy: { select: { name: true } } } }),
     prisma.monthClose.findMany({ select: { month: true } }),
+    openAccounts(),
+    eligibleMemberIds(prisma, new Date()),
   ]);
   const $ = (n: number) => money(n, settings.currencySymbol);
   const closedMonths = new Set(closed.map((c) => c.month));
@@ -28,7 +34,7 @@ export default async function ExpensesPage() {
   const bars = months.map((m) => {
     const paid = members.filter((x) => x.ledger.statusFor(m) === "paid").length;
     const owed = members.filter((x) => x.ledger.statusFor(m) !== "before-join").length;
-    return { month: m, value: paid * settings.monthlyAmount, full: paid >= owed };
+    return { month: m, value: paid * rateFor(m, settings.rates), full: paid >= owed };
   });
 
   return (
@@ -44,7 +50,7 @@ export default async function ExpensesPage() {
         <StatCard label="Total deposits" value={$(fund.totalCollected)} />
         <StatCard label="Total expenses" value={`−\u00a0${$(fund.totalExpenses)}`} tone="bad" />
         <StatCard label="Fund balance" value={$(fund.balance)} hint={`incl. ${$(fund.totalProfit)} profit${fund.paidOut ? `, after ${$(fund.paidOut)} paid out` : ""}`} tone="brand" />
-        <StatCard label="Cost per member" value={$(fund.expenseSharePerMember)} hint={`Expenses split equally across ${fund.activeMembers}`} />
+        <StatCard label="Cost share per member" value={$(fund.expenseSharePerMember)} hint={`Average of the ${fund.activeMembers} current members (split on each expense's date)`} />
       </div>
 
       <div className="flex flex-wrap items-start gap-6">
@@ -67,18 +73,24 @@ export default async function ExpensesPage() {
                   </thead>
                   <tbody>
                     {expenses.map((e) => (
-                      <tr key={e.id} className="border-b border-[#EFEDE6]">
+                      <tr key={e.id} className={`border-b border-[#EFEDE6] ${e.reversedAt ? "text-muted" : ""}`}>
                         <td className="px-4 py-2.5 text-muted sm:px-2">{fmtDay(e.date)}</td>
                         <td className="px-2 py-2.5">{CATEGORY_LABELS[e.category]}</td>
-                        <td className="px-2 py-2.5 font-semibold">{e.description}{e.createdBy && <span className="block text-xs font-normal text-muted">by {e.createdBy.name}</span>}</td>
-                        <td className="px-2 py-2.5 text-right font-bold">{$(e.amount)}</td>
+                        <td className="px-2 py-2.5 font-semibold">{e.description}{e.createdBy && <span className="block text-xs font-normal text-muted">by {e.createdBy.name}</span>}{e.reversedAt && <span className="block text-xs font-normal text-bad">Reversed {fmtDay(e.reversedAt)}: {e.reversalReason}</span>}</td>
+                        <td className={`px-2 py-2.5 text-right font-bold ${e.reversedAt ? "line-through" : ""}`}>{$(e.amount)}</td>
                         <td className="px-2 py-2.5">{e.receiptPath ? <ProofLink path={e.receiptPath} size={36} /> : <span className="text-xs text-muted">—</span>}</td>
                         <td className="px-2 py-2.5 text-right">
-                          {closedMonths.has(monthKey(e.date)) ? (
-                            <span className="text-xs text-muted">Locked</span>
-                          ) : (
-                            <ConfirmButton action={deleteExpense.bind(null, e.id)} confirmText="Delete this expense?" className={dangerLink}>Delete</ConfirmButton>
-                          )}
+                          {e.reversedAt ? (
+                            <span className="text-xs text-muted">Reversed</span>
+                          ) : viewer.role === "ADMIN" ? (
+                            <details className="text-left">
+                              <summary className={`${dangerLink} cursor-pointer list-none`}>Reverse</summary>
+                              <ActionForm action={reverse.bind(null, e.id)} submitLabel="Reverse expense" buttonClass={dangerLink} className="mt-1 flex flex-col gap-1">
+                                <input name="reason" required aria-label="Reason" placeholder="Reason" className="h-9 w-40 rounded-lg border border-field px-2 text-[13px]" />
+                                <span className="text-[11px] text-muted">{closedMonths.has(monthKey(e.date)) ? "Its month is closed: the reversal is dated today." : "A reversing entry, dated today."}</span>
+                              </ActionForm>
+                            </details>
+                          ) : null}
                         </td>
                       </tr>
                     ))}
@@ -111,35 +123,11 @@ export default async function ExpensesPage() {
           </Card>
         </div>
 
-        <Card title="Add expense" className="flex-[1_1_300px]">
-          <ActionForm action={addExpense} submitLabel="Save expense">
-            <div>
-              <label htmlFor="date" className={labelClass}>Date</label>
-              <input id="date" name="date" type="date" required defaultValue={dateInput()} max={dateInput()} className={inputClass} />
-            </div>
-            <div>
-              <label htmlFor="category" className={labelClass}>Category</label>
-              <select id="category" name="category" defaultValue="MEETING" className={inputClass}>
-                {Object.entries(CATEGORY_LABELS).map(([v, l]) => (
-                  <option key={v} value={v}>{l}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="amount" className={labelClass}>Amount ({settings.currencySymbol})</label>
-              <input id="amount" name="amount" type="number" inputMode="decimal" min="1" step="any" required className={inputClass} />
-            </div>
-            <div>
-              <label htmlFor="description" className={labelClass}>Description</label>
-              <textarea id="description" name="description" rows={2} required placeholder="What was it for?" className={textareaClass} />
-            </div>
-            <div>
-              <label htmlFor="receipt" className={labelClass}>Attach receipt</label>
-              <input id="receipt" name="receipt" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className={fileClass} />
-            </div>
-            <p className="rounded-xl bg-paper p-3 text-[13px] leading-relaxed">Each expense is split equally across the {fund.activeMembers} members&apos; cost share, and everyone sees it in their app.</p>
-          </ActionForm>
-        </Card>
+        {viewer.role === "ADMIN" && (
+          <Card title="Add expense" className="flex-[1_1_300px]">
+            <ExpenseForm members={eligible.length} currency={settings.currencySymbol} today={dateInput()} accounts={accounts} />
+          </Card>
+        )}
       </div>
     </div>
   );

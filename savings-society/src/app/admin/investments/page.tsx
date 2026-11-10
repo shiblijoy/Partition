@@ -1,28 +1,36 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { requireStaff } from "@/lib/auth-guard";
+import { openAccounts } from "@/lib/books";
 import { getSettings, money } from "@/lib/settings";
 import { fundSummary } from "@/lib/society";
 import { tally } from "@/lib/votes";
 import { dateInput, daysFromNow, fmtDate } from "@/lib/format";
 import { ActionForm } from "@/components/ActionForm";
-import { ConfirmButton } from "@/components/ConfirmButton";
+import { AccountSelect } from "@/components/AccountSelect";
 import { Card, Empty, PageHeader, Pill, StatCard, inputClass, smallButton, smallSecondary, INVESTMENT_KIND_LABELS, VOTE_RULE_LABELS } from "@/components/ui";
 import { ProposalForm } from "./ProposalForm";
-import { closeInvestment, finishVote, recordProfit, updateValuation } from "./actions";
+import { closeInvestment, finishVote, recordProfit, startInvestment, updateValuation, withdrawProposal } from "./actions";
 
 const FILTERS = ["All", "Land", "Business", "Shares", "Closed"] as const;
 
 export default async function InvestmentsPage({ searchParams }: PageProps<"/admin/investments">) {
   const { filter: raw } = await searchParams;
+  const viewer = await requireStaff();
+  const canEdit = viewer.role === "ADMIN";
   const filter = FILTERS.includes(raw as (typeof FILTERS)[number]) ? (raw as (typeof FILTERS)[number]) : "All";
-  const [settings, fund, all] = await Promise.all([
+  const [settings, fund, all, accounts, admins] = await Promise.all([
     getSettings(),
     fundSummary(),
     prisma.investment.findMany({
-      include: { votes: true, incomes: { select: { amount: true } }, _count: { select: { documents: true } } },
+      include: { votes: true, incomes: { where: { reversedAt: null }, select: { amount: true } }, valuations: { orderBy: { date: "desc" }, take: 3 }, _count: { select: { documents: true } } },
       orderBy: { createdAt: "desc" },
     }),
+    openAccounts(),
+    prisma.user.findMany({ where: { role: "ADMIN" }, select: { id: true, name: true } }),
   ]);
+  const adminName = (id: string | null) => admins.find((a) => a.id === id)?.name ?? "an admin";
+  const passed = all.filter((i) => i.status === "PASSED");
   const $ = (n: number) => money(n, settings.currencySymbol);
   const proposals = all.filter((i) => i.status === "PROPOSED");
   const shown = all.filter((i) =>
@@ -63,14 +71,38 @@ export default async function InvestmentsPage({ searchParams }: PageProps<"/admi
                   </div>
                   <div className="flex items-center gap-2">
                     <Pill tone={t.passed ? "good" : t.canPass ? "warn" : "bad"}>{t.passed ? "Passing" : t.canPass ? "Open" : "Can't pass"}</Pill>
-                    <ConfirmButton
-                      action={finishVote.bind(null, p.id)}
-                      confirmText={t.passed ? `Close the vote and invest ${$(p.amount)}?` : "Close the vote? It hasn't passed, so it will be marked not approved."}
-                      className={smallButton}
-                    >
-                      Close vote
-                    </ConfirmButton>
+                    {canEdit && (
+                      <>
+                        <ActionForm action={finishVote.bind(null, p.id)} submitLabel="Close vote now" buttonClass={smallButton} className="flex"><span className="sr-only">Close vote</span></ActionForm>
+                        <ActionForm action={withdrawProposal.bind(null, p.id)} submitLabel="Withdraw" buttonClass={smallSecondary} className="flex"><span className="sr-only">Withdraw proposal</span></ActionForm>
+                      </>
+                    )}
                   </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
+
+      {passed.length > 0 && (
+        <Card title="Approved by members · record the money paid out">
+          <ul className="flex flex-col gap-4">
+            {passed.map((p) => {
+              const needsTwo = settings.dualApprovalLimit != null && p.amount > settings.dualApprovalLimit;
+              return (
+                <li key={p.id} className="flex flex-col gap-2 border-b border-[#EFEDE6] pb-4 last:border-0 last:pb-0">
+                  <div className="font-bold">{p.name} · {$(p.amount)}</div>
+                  {needsTwo && <p className="text-[13px] text-warn">Above the society&apos;s limit of {$(settings.dualApprovalLimit!)}: two admins must confirm.{p.firstApprover && ` ${adminName(p.firstApprover)} has confirmed; waiting for a second admin.`}</p>}
+                  {canEdit && (
+                    <div className="flex flex-wrap items-end gap-2">
+                      <ActionForm action={startInvestment.bind(null, p.id)} submitLabel={p.firstApprover ? "Confirm as second admin & invest" : "Record payment & start investment"} buttonClass={smallButton} className="flex flex-wrap items-end gap-2" resetOnSuccess={false}>
+                        <AccountSelect accounts={accounts} label="Paid from" id={`inv-acc-${p.id}`} />
+                        <input name="date" type="date" defaultValue={dateInput()} aria-label="Date paid out" className={`${inputClass} w-44`} />
+                      </ActionForm>
+                      <ActionForm action={withdrawProposal.bind(null, p.id)} submitLabel="Withdraw" buttonClass={smallSecondary} className="flex"><span className="sr-only">Withdraw</span></ActionForm>
+                    </div>
+                  )}
                 </li>
               );
             })}
@@ -128,17 +160,22 @@ export default async function InvestmentsPage({ searchParams }: PageProps<"/admi
                     Closed {v.closedAt ? fmtDate(v.closedAt) : ""}: {$(v.returnedAmount ?? 0)} returned{profit > 0 && ` +\u00a0${$(profit)} profit`}.
                   </p>
                 )}
-                {v.status === "ACTIVE" && (
+                {v.valuations.length > 0 && (
+                  <p className="mt-2 text-xs text-muted">Valuations: {v.valuations.map((x) => `${$(x.value)} (${fmtDate(x.date)}${x.recordedBy ? `, ${x.recordedBy}` : ""})`).join(" · ")}</p>
+                )}
+                {v.status === "ACTIVE" && canEdit && (
                   <div className="mt-4 flex flex-wrap gap-2 border-t border-[#EFEDE6] pt-4">
-                    {v.kind === "BUSINESS" ? (
+                    {v.kind !== "LAND" && (
                       <details>
                         <summary className={`${smallButton} cursor-pointer list-none`}>Record profit payment</summary>
                         <ActionForm action={recordProfit.bind(null, v.id)} submitLabel="Save" buttonClass={smallButton} className="mt-2 flex flex-wrap items-end gap-2">
                           <input name="amount" type="number" min="1" required aria-label="Profit amount" placeholder="Amount" className={`${inputClass} w-36`} />
                           <input name="date" type="date" defaultValue={dateInput()} aria-label="Date received" className={`${inputClass} w-44`} />
+                          <AccountSelect accounts={accounts} label="Into account" id={`prof-${v.id}`} compact />
                         </ActionForm>
                       </details>
-                    ) : (
+                    )}
+                    {v.kind !== "BUSINESS" && (
                       <details>
                         <summary className={`${smallButton} cursor-pointer list-none`}>Update valuation</summary>
                         <ActionForm action={updateValuation.bind(null, v.id)} submitLabel="Save" buttonClass={smallButton} className="mt-2 flex flex-wrap items-end gap-2" resetOnSuccess={false}>
@@ -160,9 +197,12 @@ export default async function InvestmentsPage({ searchParams }: PageProps<"/admi
           })}
         </div>
 
-        <Card title="New investment proposal" className="flex-[1_1_340px]">
-          <ProposalForm cash={fund.cash} cashLabel={$(fund.cash)} currency={settings.currencySymbol} members={fund.activeMembers} defaultRule={settings.defaultVoteRule} nextWeek={dateInput(daysFromNow(7))} />
-        </Card>
+        {canEdit && (
+          <Card title="New investment proposal" className="flex-[1_1_340px]">
+            <ProposalForm cash={fund.cash} cashLabel={$(fund.cash)} currency={settings.currencySymbol} members={fund.activeMembers} defaultRule={settings.defaultVoteRule} nextWeek={dateInput(daysFromNow(7))} />
+            <p className="mt-3 text-xs text-muted">Voting closes automatically at the deadline and every member is told the result.</p>
+          </Card>
+        )}
       </div>
     </div>
   );

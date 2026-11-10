@@ -41,8 +41,29 @@ export function AddMemberForm({ thisMonth, catchUpLabel, startLabel }: { thisMon
       ) : (
         <p className="text-[13px] text-muted">They owe every month since the society started ({startLabel}), the same as the founding members.</p>
       )}
+      <fieldset className="flex flex-col gap-3 rounded-xl bg-paper p-3">
+        <legend className="px-1 text-xs font-extrabold tracking-wide text-muted">NOMINEE (REQUIRED)</legend>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label htmlFor="nomineeName" className={labelClass}>Nominee name</label>
+            <input id="nomineeName" name="nomineeName" required className={inputClass} />
+          </div>
+          <div>
+            <label htmlFor="nomineeRelation" className={labelClass}>Relation</label>
+            <input id="nomineeRelation" name="nomineeRelation" required placeholder="e.g. Wife, Son" className={inputClass} />
+          </div>
+          <div>
+            <label htmlFor="nomineePhone" className={labelClass}>Nominee mobile</label>
+            <input id="nomineePhone" name="nomineePhone" type="tel" required className={inputClass} />
+          </div>
+          <div>
+            <label htmlFor="nomineeNid" className={labelClass}>Nominee NID (optional)</label>
+            <input id="nomineeNid" name="nomineeNid" inputMode="numeric" className={inputClass} />
+          </div>
+        </div>
+      </fieldset>
       <p className="text-xs leading-relaxed text-muted">
-        A temporary password is created for you to send on WhatsApp (SMS if the number has no WhatsApp). The member must set their own password at first login.
+        A temporary password is sent on WhatsApp (SMS if the number has no WhatsApp). If neither can be sent, it&apos;s shown here once to give in person. The member must set their own password at first login.
       </p>
     </ActionForm>
   );

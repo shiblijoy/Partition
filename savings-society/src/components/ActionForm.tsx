@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef } from "react";
 import { primaryButton } from "@/components/ui";
+import { useT } from "@/components/I18n";
 
 export type FormState = { error?: string; ok?: string; link?: { href: string; label: string } };
 
@@ -26,6 +27,7 @@ export function ActionForm({
   className?: string;
   children: React.ReactNode;
 }) {
+  const t = useT();
   const [state, formAction, pending] = useActionState(action, {});
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -36,15 +38,15 @@ export function ActionForm({
   return (
     <form ref={formRef} action={formAction} className={className}>
       {children}
-      {state.error && <p className="rounded-xl bg-bad-bg px-4 py-3 text-sm font-semibold text-bad">{state.error}</p>}
-      {state.ok && <p className="rounded-xl bg-good-bg px-4 py-3 text-sm font-semibold text-good">{state.ok}</p>}
+      {state.error && <p className="rounded-xl bg-bad-bg px-4 py-3 text-sm font-semibold text-bad">{t(state.error)}</p>}
+      {state.ok && <p className="rounded-xl bg-good-bg px-4 py-3 text-sm font-semibold text-good">{t(state.ok)}</p>}
       {state.link && (
         <a href={state.link.href} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center justify-center rounded-xl border-2 border-brand px-4 text-sm font-bold no-underline">
           {state.link.label}
         </a>
       )}
       <button type="submit" disabled={pending} className={buttonClass}>
-        {pending ? pendingLabel : submitLabel}
+        {pending ? t(pendingLabel) : submitLabel}
       </button>
     </form>
   );

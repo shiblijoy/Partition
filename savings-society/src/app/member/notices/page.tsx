@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireMember } from "@/lib/auth-guard";
-import { fmtDateTime, fmtDay } from "@/lib/format";
+import { fmtDateTime } from "@/lib/format";
+import { tFor, dateName } from "@/lib/i18n";
 import { calendarLink } from "@/lib/calendar";
 import { fileUrl } from "@/lib/uploads";
 import { Icon } from "@/components/icons";
@@ -10,6 +11,7 @@ const KIND_TONE: Record<string, Tone> = { MEETING: "brand", VOTE: "warn", REMIND
 
 export default async function NoticesPage() {
   const session = await requireMember();
+  const t = tFor(session.language);
   const notices = await prisma.notice.findMany({ orderBy: { createdAt: "desc" }, take: 50 });
 
   // Opening the page marks everything as read (the admin sees "x / 24 read").
@@ -21,13 +23,13 @@ export default async function NoticesPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <ScreenHeader title="Notices" back="/member" />
-      {notices.length === 0 && <p className="rounded-xl border border-line bg-white p-4 text-sm text-muted">No notices yet.</p>}
+      <ScreenHeader title={t("Notices")} back="/member/notifications" />
+      {notices.length === 0 && <p className="rounded-xl border border-line bg-white p-4 text-sm text-muted">{t("No notices yet.")}</p>}
       {notices.map((n) => (
         <article key={n.id} className={`flex flex-col gap-2 rounded-2xl bg-white p-4 ${n.kind === "MEETING" ? "border-2 border-brand" : "border border-line"}`}>
           <div className="flex items-center justify-between gap-2">
-            <Pill tone={KIND_TONE[n.kind]}>{NOTICE_LABELS[n.kind]}</Pill>
-            <span className="text-xs text-muted">{fmtDay(n.createdAt)}</span>
+            <Pill tone={KIND_TONE[n.kind]}>{t(NOTICE_LABELS[n.kind])}</Pill>
+            <span className="text-xs text-muted">{dateName(n.createdAt, session.language, false)}</span>
           </div>
           <h2 className="text-base font-extrabold">{n.title}</h2>
           {n.eventAt && (
@@ -37,15 +39,21 @@ export default async function NoticesPage() {
             </div>
           )}
           <p className="whitespace-pre-line text-[13px] leading-relaxed text-muted">{n.body}</p>
+          {n.minutes && (
+            <div className="rounded-xl bg-paper p-3 text-[13px] leading-relaxed">
+              <p className="font-bold">{t("Minutes and decisions")}</p>
+              <p className="whitespace-pre-line">{n.minutes}</p>
+            </div>
+          )}
           <div className="flex flex-wrap gap-4">
             {n.eventAt && (
               <a href={calendarLink(n.title, n.eventAt, n.place, n.body)} target="_blank" rel="noopener noreferrer" className="flex min-h-11 items-center gap-1.5 text-[13px] font-bold">
-                <Icon name="calendar" size={18} /> Add to calendar
+                <Icon name="calendar" size={18} /> {t("Add to calendar")}
               </a>
             )}
             {n.attachmentPath && (
               <a href={fileUrl(n.attachmentPath)} target="_blank" rel="noopener noreferrer" className="flex min-h-11 items-center gap-1.5 text-[13px] font-bold">
-                <Icon name="file" size={18} /> Attachment
+                <Icon name="file" size={18} /> {t("Attachment")}
               </a>
             )}
           </div>

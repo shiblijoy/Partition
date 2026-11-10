@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { requireStaff } from "@/lib/auth-guard";
 import { getSettings, money } from "@/lib/settings";
 import { addMonths, currentMonth, isMonthKey, monthLabel, monthRange } from "@/lib/months";
 import { fmtDateTime, fmtDay } from "@/lib/format";
@@ -21,14 +22,15 @@ type ReportType = (typeof TYPES)[number][0];
 
 const CELL: Record<MonthStatus, string> = {
   paid: "bg-brand text-white",
-  partial: "bg-[#C98A3A] text-white",
+  pending: "bg-[#C98A3A] text-white",
   due: "bg-bad-bg text-bad",
   upcoming: "bg-paper text-muted",
   "before-join": "text-field",
 };
-const CELL_MARK: Record<MonthStatus, string> = { paid: "✓", partial: "½", due: "✕", upcoming: "", "before-join": "–" };
+const CELL_MARK: Record<MonthStatus, string> = { paid: "✓", pending: "…", due: "✕", upcoming: "", "before-join": "–" };
 
 export default async function ReportPage({ searchParams }: PageProps<"/admin/report">) {
+  await requireStaff();
   const sp = await searchParams;
   const type: ReportType = TYPES.some(([t]) => t === sp.type) ? (sp.type as ReportType) : "month";
   const settings = await getSettings();
@@ -88,12 +90,16 @@ function Picker({ type, name, value, options }: { type: string; name: string; va
   );
 }
 
-function Actions({ csv, share }: { csv?: string; share?: { title: string; body: string } }) {
+async function Actions({ csv, share }: { csv?: string; share?: { title: string; body: string } }) {
+  const canShare = (await requireStaff()).role === "ADMIN";
   return (
     <div className="no-print flex flex-wrap gap-2">
       <PrintButton />
-      {csv && <a href={csv} className={`${secondaryButton} no-underline`}>Download Excel (CSV)</a>}
-      {share && (
+      {csv && <a href={csv} className={`${secondaryButton} no-underline`}>Download CSV</a>}
+      {csv?.includes("type=month") && <a href={csv.replace("/csv?", "/xlsx?")} className={`${secondaryButton} no-underline`}>Download Excel</a>}
+      {csv?.includes("type=month") && <a href={csv.replace("/csv?", "/pdf?")} target="_blank" rel="noopener" className={`${secondaryButton} no-underline`}>Download PDF</a>}
+      {csv?.includes("type=member") && <a href={`/member/statement/pdf?member=${new URLSearchParams(csv.split("?")[1]).get("member")}&year=${new Date().getFullYear()}`} target="_blank" rel="noopener" className={`${secondaryButton} no-underline`}>Yearly statement PDF</a>}
+      {share && canShare && (
         <ConfirmButton action={shareReport.bind(null, share.title, share.body)} confirmText="Post this summary on the members' notice board?" className={secondaryButton}>
           Share with members
         </ConfirmButton>
@@ -183,7 +189,7 @@ async function AnnualReport({ year, years, $ }: { year: string; years: string[];
 
 async function MemberReport({ memberId, members, $ }: { memberId: string; members: Array<{ id: string; name: string; memberNo: number | null }>; $: Money }) {
   if (!memberId) return <Card><Empty>No members yet.</Empty></Card>;
-  const { member, position, fund } = await memberStatement(memberId);
+  const { member, position } = await memberStatement(memberId);
   return (
     <>
       <Picker type="member" name="member" value={memberId} options={members.map((m) => [m.id, `${m.memberNo != null ? `#${String(m.memberNo).padStart(2, "0")} ` : ""}${m.name}`])} />
@@ -192,8 +198,8 @@ async function MemberReport({ memberId, members, $ }: { memberId: string; member
         <p className="mb-4 text-[13px] text-muted">{member.phone} · since {monthLabel(member.joinMonth)} · as of today</p>
         <Line label={`Approved deposits (${member.payments.length} payments)`} value={$(position.deposits)} />
         {position.withdrawn > 0 && <Line label="− Withdrawn" value={`−\u00a0${$(position.withdrawn)}`} tone="bad" />}
-        <Line label={`+ Profit share (1/${fund.activeMembers})`} value={`+\u00a0${$(position.profitShare)}`} tone="good" />
-        <Line label={`− Cost share (1/${fund.activeMembers})`} value={`−\u00a0${$(position.costShare)}`} tone="bad" />
+        <Line label="+ Profit share (of profits dated while a member)" value={`+\u00a0${$(position.profitShare)}`} tone="good" />
+        <Line label="− Cost share (of costs dated while a member)" value={`−\u00a0${$(position.costShare)}`} tone="bad" />
         <Line label="Net value" value={$(position.net)} total />
         <div className="mt-5 -mx-4 overflow-x-auto sm:mx-0">
           <table className="w-full min-w-[480px] text-sm">
@@ -208,9 +214,9 @@ async function MemberReport({ memberId, members, $ }: { memberId: string; member
             <tbody>
               {member.payments.map((p) => (
                 <tr key={p.id} className="border-b border-[#EFEDE6]">
-                  <td className="px-4 py-2 sm:px-2">{monthLabel(p.forMonth)}{p.monthsCount > 1 && ` +${p.monthsCount - 1}`}</td>
-                  <td className="px-2 py-2">{p.receiptNo ?? "—"}</td>
-                  <td className="px-2 py-2">{fmtDay(p.paidOn)}</td>
+                  <td className="px-4 py-2 sm:px-2">{monthLabel(p.forMonth)}</td>
+                  <td className="px-2 py-2">{p.receipt?.receiptNo ?? "—"}</td>
+                  <td className="px-2 py-2">{fmtDay(p.receivedOn ?? p.paidOn)}</td>
                   <td className="px-2 py-2 text-right font-bold">{$(p.amount)}</td>
                 </tr>
               ))}
