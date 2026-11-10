@@ -11,7 +11,9 @@ import { inTx, type Actor } from "@/lib/services/payments";
 export async function calculatedBalances(month: string) {
   const end = monthEnd(month);
   const rows = await accountBalances(prisma, end);
-  return rows.filter((a) => a.createdAt <= end && (!a.closedOn || a.closedOn > end) && (a.active || a.closedOn));
+  // Accounts open at the month's end. When an account was added to the app doesn't matter (its
+  // opening balance covers the time before); FDRs count from the day they were opened.
+  return rows.filter((a) => (!a.openedOn || a.openedOn <= end) && (!a.closedOn || a.closedOn > end) && (a.active || a.closedOn));
 }
 
 export type ReconInput = { accountId: string; actual: number; note: string | null; fix: "none" | "charge" | "interest"; statementPath: string | null };

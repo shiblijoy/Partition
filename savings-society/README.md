@@ -25,7 +25,10 @@ from the design, waiting for the society's real details.
 | Payout receipt | The settlement breakdown; confirm "I received ৳…" or report a problem. |
 | Profile & nominee | Masked NID and nominee. Members edit their own date of birth, address, NID and nominee; changes apply only after the admin approves them (name and mobile number are changed by the admin). Account deletion (= full withdrawal, personal data erased after payout). |
 | Notices | Meetings (add to calendar), votes, reminders and decisions; opening the page marks them read. |
-| Asset documents / Society books | Read-only deeds and agreements by asset; open books of income and costs. |
+| Asset documents / Society books | Read-only deeds and agreements by asset (watermarked downloads); open books of income and costs, and your own cost and profit share. |
+| Notifications | Approvals, rejections, receipts, votes, withdrawals, notices; turn on push for this phone. |
+| Yearly statement | Deposits, shares and net value for a year, with a PDF. |
+| Language | Bangla or English, on the login page or in My profile. |
 | Check a receipt | Enter a receipt's code to confirm the society issued it. |
 
 ## Admin console (desktop, works on phones too)
@@ -45,34 +48,81 @@ from the design, waiting for the society's real details.
 | Notice board | Post meetings / reminders / decisions with attachments, share text for the WhatsApp group, read counts. |
 | Asset documents | Upload with versions (nothing is deleted), "seen by" counts, filters. |
 | Reports | Monthly report, annual summary, member statement, audit log and deposits grid — print to PDF, download CSV, share a summary with members. Draft until the month is closed. |
-| Settings | Society rules, society accounts, export everything (Excel workbook + ZIP of files), add admins, and an admin handover both admins confirm. |
+| Accounts & ledger | Each society account (bank, bKash/Nagad, cash, FDRs) with its balance, moving money between accounts, and every ledger entry. |
+| Settings | Society rules, monthly amount changes from a future month, second-admin limit, reminders, connections (WhatsApp/SMS/push), export everything (Excel workbook + ZIP of files), admins and auditors, and an admin handover both admins confirm. |
 
 ## The calculations
 
-- **Expected / due**: months since the member's first month × the monthly
-  amount, against their *approved* deposits. Money is applied oldest month first.
-- **Profit** = recorded income + gain (or loss) on closed investments.
-  **Costs** = expenses. Both are split equally across current members.
-- **Fund balance** = deposits − costs + profit − payouts. **Cash** = fund
-  balance − money currently invested. Estimated land/share gains are shown
-  separately and only count once sold.
-- **Settlement** = deposits (less earlier partial withdrawals) + profit share −
-  cost share (+ land share if paid now). It's frozen when the admin approves.
-  A member who leaves takes their share out of the profit and cost pools, so
-  the rest is split across whoever remains.
-- A member stops counting as soon as their settlement is paid; they keep their
-  login until they confirm the payout.
+Everything is a sum of the **ledger**: every taka that moves (deposit, expense,
+income, investment out, capital back, payout, transfer between accounts) is one
+entry naming the society account it moved through. Nothing is typed in as a total.
+
+- **Deposits:** one payment per month. A month is paid once its payment is
+  approved; a second payment for the same month is refused by the database.
+  Paying several months at once makes one linked payment per month, each with its
+  own receipt. The amount is the monthly rate in force for that month; a change
+  of rate applies from a future month only.
+- **Due / Behind:** months since the member's first month with no approved
+  payment, at each month's rate.
+- **Shares:** each expense and each profit (income, or the gain on a closed
+  investment) is split, on its own date, among the members active that day, in
+  paisa. Shares are shown rounded to the taka and the left-over paisa stay in
+  the fund. "Start fresh" members share from their first month; "pay back"
+  members become founding members once every back month is approved.
+- **Cash** = deposits − expenses − invested + capital returned + income −
+  payouts (+ opening balances). **Fund balance** = cash + money invested.
+  Estimated land/share gains are shown separately and count only once sold.
+- **Settlement** = deposits (less earlier withdrawals) + profit share − cost
+  share (+ land share if paid now). It's frozen when approved. A land share left
+  "on sale" stays listed as owed until the land is sold and it's paid.
+- **Corrections:** nothing is deleted. A mistaken approval, expense or income is
+  reversed by an opposite entry with a reason (its receipt marked cancelled).
+  Closed months are locked.
 
 ## Security & records
 
-- Proofs, statements and certificates live outside `public/` in `storage/`
-  and are served by `/files/...` after a session check: members see only their
-  own proofs; receipts, documents and notice attachments are open to members;
-  statements are admin-only.
-- Every server action re-checks the role; member IDs come from the session.
-- Approvals only act on pending payments, so a double tap can't approve twice.
-- Admin actions are written to an append-only **audit log**.
-- Closed months are locked: expenses and income dated in them can't be added or deleted.
+- Logins have a session record each. Changing or resetting a password signs out
+  every other device. Five wrong passwords lock an account for 15 minutes.
+  Admin sessions last 8 hours; admins also confirm a 6-digit WhatsApp code once
+  WhatsApp is connected. An auditor role can read everything but change nothing.
+- NID numbers, addresses, dates of birth and nominee details are encrypted in
+  the database (AES-256-GCM, `DATA_KEY`).
+- Proofs, statements and documents live outside `public/` in `storage/` and are
+  served after a session check. Members see only their own proofs; members'
+  document downloads go through `/docs/…`, which records "seen by" and stamps a
+  watermark with the society's name, the member's name and the date.
+- Payouts and investments above a limit need a second, different admin.
+- The audit log records who, when, before/after values, IP and device, for
+  approvals, reversals, edits, logins, lockouts and password resets.
+- Members who left keep read-only access to their history and receipts for 12
+  months.
+
+## Messages, jobs and offline use
+
+- WhatsApp (Cloud API, four approved templates) for admin login codes,
+  temporary passwords, due reminders and rejections, with an SMS fallback.
+  Without keys, the app logs them as skipped and shows ready-to-send links.
+- Push notifications (web push) and an in-app notification list for approvals,
+  rejections, receipts, votes, withdrawals, notices and documents.
+- Scheduled jobs every 15 minutes (`deploy/dreamhive-jobs.timer` → `/api/cron`):
+  votes close at their deadline and every member is told the result, due
+  reminders go out on the reminder day, admins are reminded 7 days before an FDR
+  matures, members with no nominee are flagged after 30 days, and expired
+  sessions and codes are purged.
+- A service worker shows the last copy of member pages offline. A payment
+  submitted offline is saved on the phone and sent when the connection returns.
+  Proof photos are shrunk to under 1 MB on the phone before upload.
+- The member app is in **Bangla or English**; the member picks. The admin
+  console is in English.
+
+## Tests
+
+`npm test` runs a test for each business rule in §4 of the specification and the
+acceptance checks of §9.1 (on a throw-away database): pending payments change no
+total, a repeat month is blocked, a three-month payment gives three receipts,
+৳18,450 across 24 members is ৳769 each, ৳2,400 interest is ৳100 each, the worked
+settlement is ৳92,106 (৳98,356 with land), a payout above cash is blocked, a
+৳500 reconciliation difference blocks closing, and so on.
 
 ## Getting started
 
@@ -87,6 +137,8 @@ npm run dev
 - Admin: `01700000000` (or `admin@society.local`) / `ChangeMe123!`
 - Demo member (Rahim Ahmed): `01711111111` / `Member123!` (all 24 demo members use `Member123!`)
 
+Upgrading a database made by the first version: `npx prisma migrate deploy && npm run db:upgrade` (deploy/update.sh does this).
+
 Set `SEED_DEMO=0` to skip the demo data, and change the admin password before real use.
 
 ## Deploying
@@ -99,11 +151,13 @@ so updates never touch the society's records.
 
 ## Known limits
 
-1. **No automatic WhatsApp/SMS.** Invites, reminders and notices open WhatsApp
-   with the message ready (`wa.me` links); the admin taps send. The admin
-   login's 6-digit WhatsApp code in the design needs a WhatsApp Business API
-   account, so it isn't built yet.
-2. **No QR code** on receipts yet — the verification code is printed instead.
-3. Changing the monthly amount re-prices every month, including past ones.
-4. Admins log in by email, so an admin can also keep a separate member account
-   on their phone number.
+1. **WhatsApp and push need your own accounts.** The code is in place; they start
+   working once the keys are in `.env` (DEPLOY.md). Until then, invites and
+   reminders use ready-to-send WhatsApp links, and admin login has no code step.
+2. **The Android app is the website in a Trusted Web Activity**, built with
+   Bubblewrap from `manifest.json` (DEPLOY.md → Android app); there's no separate
+   Flutter codebase. An iPhone uses the home-screen web app.
+3. **Receipt PDFs are in English** (the standard PDF fonts have no Bangla); the
+   on-screen receipt shows the amount in words in Bangla for Bangla users.
+4. The Bangla text was written for this app; have a native speaker on the
+   committee read it before launch.

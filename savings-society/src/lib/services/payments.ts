@@ -126,7 +126,9 @@ type ApproveInput = { receivedOn: Date; accountId?: string | null; actor: Actor;
 async function approveIn(db: Db, settings: Settings, paymentId: string, input: ApproveInput): Promise<number> {
   const batch = (await batchOf(db, paymentId)).filter((p) => p.status === "PENDING");
   if (batch.length === 0) return 0;
-  if (input.receivedOn > new Date()) throw new ServiceError("The date received can't be in the future.");
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+  if (input.receivedOn > endOfToday) throw new ServiceError("The date received can't be in the future.");
   await assertOpenMonth(db, input.receivedOn);
   const accountId = await accountOrDefault(db, input.accountId);
   const member = await db.user.findUniqueOrThrow({ where: { id: batch[0].memberId } });

@@ -11,6 +11,7 @@ as_app() { sudo -u dreamhive -H bash -c "cd '$APP_DIR' && $1"; }
 as_app "git fetch origin '$BRANCH' && git checkout '$BRANCH' && git pull --ff-only origin '$BRANCH'"
 as_app "npm ci"
 as_app "npx prisma migrate deploy"
+as_app "npx tsx prisma/upgrade.ts"                # converts older data once; does nothing after that
 as_app "npm run build"
 systemctl restart dreamhive
 echo "Updated to $(as_app 'git log --oneline -1')"

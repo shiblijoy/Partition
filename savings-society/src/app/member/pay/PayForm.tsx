@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 import { submitPayment } from "./actions";
 import type { PayState } from "./submit";
 import { Icon } from "@/components/icons";
@@ -66,12 +66,17 @@ export function PayForm({
   return (
     <form
       ref={formRef}
-      action={formAction}
+      // Submitted by hand rather than with the form's action prop, so the fields (and the chosen
+      // photo) stay filled in when the server answers with a warning or an error.
       onSubmit={async (e) => {
-        if (navigator.onLine) return; // normal submit
         e.preventDefault();
-        await queuePayment(new FormData(e.currentTarget));
-        setSavedOffline(true);
+        const data = new FormData(e.currentTarget);
+        if (!navigator.onLine) {
+          await queuePayment(data);
+          setSavedOffline(true);
+          return;
+        }
+        startTransition(() => formAction(data));
       }}
       className="flex flex-col gap-4 pb-4"
     >
