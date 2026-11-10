@@ -24,7 +24,7 @@ const inv = await import("@/lib/services/investments");
 const wd = await import("@/lib/services/withdrawals");
 const rec = await import("@/lib/services/reconcile");
 const { fundSummary, memberPosition, ledgerFor } = await import("@/lib/society");
-const { cashAt } = await import("@/lib/books");
+const { cashAt, resplitFrom } = await import("@/lib/books");
 const { encryptPii } = await import("@/lib/crypto");
 const { addMonths, currentMonth, monthEnd } = await import("@/lib/months");
 
@@ -221,4 +221,18 @@ test("the ledger balances: cash equals opening balances plus every entry, and tr
   const sum = (await prisma.ledgerEntry.aggregate({ _sum: { amount: true } }))._sum.amount ?? 0;
   assert.equal(f.cash, sum);
   assert.equal((await prisma.ledgerEntry.aggregate({ where: { type: "TRANSFER" }, _sum: { amount: true } }))._sum.amount, 0);
+});
+
+test("a member added later with an earlier first month shares the costs since that month", async () => {
+  const s = await settings();
+  const date = day(addMonths(start, 1), 20);
+  const e = await books.addExpense(s, { date, category: "OTHER", amount: 1500, description: "Before the new member", receiptPath: null, accountId: bank, actor: admin });
+  const shares = async () => prisma.allocation.findMany({ where: { sourceType: "expense", sourceId: e.id } });
+  const before = await shares();
+  const late = await prisma.user.create({ data: { name: "Late joiner", phone: "01799999999", passwordHash: "x", role: "MEMBER", joinMonth: start } });
+  await resplitFrom(prisma, start);
+  const after = await shares();
+  assert.equal(after.length, before.length + 1); // the new member now carries a share
+  assert.ok(after.some((a) => a.memberId === late.id));
+  assert.ok(after.reduce((t, a) => t + a.paisa, 0) >= -150000); // the total never exceeds the cost
 });
