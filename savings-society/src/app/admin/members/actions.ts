@@ -162,7 +162,7 @@ export async function recordPayment(memberId: string, _prev: FormState, formData
     const months = [...new Set(formData.getAll("months").map(String))].filter(isMonthKey).sort();
     const method = String(formData.get("method") ?? "") as PaymentMethod;
     if (months.length === 0) return { error: "Pick at least one month." };
-    if (!Object.values(PaymentMethod).includes(method)) return { error: "Choose a payment method." };
+    if (method !== PaymentMethod.BANK) return { error: "Only bank payments are accepted." };
     let proofPath: string | null = null;
     const proof = formData.get("proof");
     if (proof instanceof File && proof.size > 0) {
@@ -201,7 +201,7 @@ export async function removeMember(memberId: string, _prev: FormState, formData:
     if (!reason) return { error: "Give a reason (it's kept in the audit log)." };
     const member = await prisma.user.findUniqueOrThrow({ where: { id: memberId } });
     if (await prisma.withdrawal.findFirst({ where: { memberId, status: { in: ["PENDING", "APPROVED"] } } })) return { error: "This member already has a settlement open." };
-    const w = await prisma.withdrawal.create({ data: { memberId, kind: "FULL", exitAs: "REMOVED", payTo: `bKash ${member.phone}`, reason, adminNote: `Removed by ${admin.name}` } });
+    const w = await prisma.withdrawal.create({ data: { memberId, kind: "FULL", exitAs: "REMOVED", payTo: "Bank account to be confirmed with the member", reason, adminNote: `Removed by ${admin.name}` } });
     await audit(admin.userId, "member.removed", `${admin.name} started removing ${member.name}: ${reason}`, { entity: `user:${memberId}` });
     changed();
     return { ok: w.id };

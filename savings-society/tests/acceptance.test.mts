@@ -65,7 +65,7 @@ after(async () => {
 
 test("a submitted payment is pending, changes no total, and appears in the queue", async () => {
   const s = await settings();
-  const [p] = await pay.submitPayments(s, { memberId: members[0], months: [start], method: "BKASH", reference: "TX1", paidOn: day(start, 3), proofPath: null, note: null });
+  const [p] = await pay.submitPayments(s, { memberId: members[0], months: [start], method: "BANK", reference: "TX1", paidOn: day(start, 3), proofPath: null, note: null });
   assert.equal(p.status, "PENDING");
   assert.equal((await fundSummary()).totalCollected, 0);
   assert.equal(await prisma.payment.count({ where: { status: "PENDING" } }), 1);
@@ -80,7 +80,9 @@ test("approving updates savings and fund, issues a receipt with a verify code; a
   assert.ok(r.verifyCode);
   assert.equal((await fundSummary()).totalCollected, 10000);
   assert.equal(await cashAt(prisma, undefined, wallet), 10000);
-  await assert.rejects(pay.submitPayments(s, { memberId: members[0], months: [start], method: "BKASH", reference: "TX2", paidOn: day(start, 5), proofPath: null, note: null }), /already has a payment/);
+  // Bank payments only: any other method is refused.
+  await assert.rejects(pay.submitPayments(s, { memberId: members[0], months: [addMonths(start, 1)], method: "BKASH", reference: "BK1", paidOn: day(start, 5), proofPath: null, note: null }), /Only bank payments/);
+  await assert.rejects(pay.submitPayments(s, { memberId: members[0], months: [start], method: "BANK", reference: "TX2", paidOn: day(start, 5), proofPath: null, note: null }), /already has a payment/);
 });
 
 test("a rejected payment shows its reason and the month can be resubmitted", async () => {
@@ -124,9 +126,9 @@ test("FR-APR-06: an approval made by mistake is reversed; the receipt is cancell
 
 test("a cash payment recorded by the admin is approved, marked, with a receipt; months already paid are skipped", async () => {
   const s = await settings();
-  const r = await pay.recordForMember(s, { memberId: members[2], months: [start, addMonths(start, 1)], method: "CASH", reference: null, receivedOn: day(addMonths(start, 1), 10), proofPath: null, accountId: bank, actor: admin });
+  const r = await pay.recordForMember(s, { memberId: members[2], months: [start, addMonths(start, 1)], method: "BANK", reference: null, receivedOn: day(addMonths(start, 1), 10), proofPath: null, accountId: bank, actor: admin });
   assert.equal(r.approved, 2);
-  const again = await pay.recordForMember(s, { memberId: members[2], months: [addMonths(start, 1), addMonths(start, 2)], method: "CASH", reference: null, receivedOn: day(addMonths(start, 2), 10), proofPath: null, accountId: bank, actor: admin });
+  const again = await pay.recordForMember(s, { memberId: members[2], months: [addMonths(start, 1), addMonths(start, 2)], method: "BANK", reference: null, receivedOn: day(addMonths(start, 2), 10), proofPath: null, accountId: bank, actor: admin });
   assert.deepEqual(again.skipped, [addMonths(start, 1)]);
   const p = await prisma.payment.findFirstOrThrow({ where: { memberId: members[2], forMonth: start }, include: { receipt: true } });
   assert.equal(p.recordedBy, admin.name);

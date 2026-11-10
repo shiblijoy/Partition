@@ -11,7 +11,7 @@ const option = (on: boolean) =>
     on ? "border-2 border-brand" : "border border-field"
   }`;
 
-export function WithdrawForm({ defaultPayTo, currency }: { defaultPayTo: string; currency: string }) {
+export function WithdrawForm({ currency }: { currency: string }) {
   const t = useT();
   const [kind, setKind] = useState<"FULL" | "PARTIAL">("FULL");
   return (
@@ -36,8 +36,8 @@ export function WithdrawForm({ defaultPayTo, currency }: { defaultPayTo: string;
         </div>
       )}
       <div>
-        <label htmlFor="payTo" className={labelClass}>{t("Send money to")}</label>
-        <input id="payTo" name="payTo" required defaultValue={`bKash ${defaultPayTo}`} className={inputClass} />
+        <label htmlFor="payTo" className={labelClass}>{t("Your bank account (bank, account name and number)")}</label>
+        <input id="payTo" name="payTo" required placeholder={t("e.g. [Bank], [Your name], A/C [number]")} className={inputClass} />
       </div>
       <div>
         <label htmlFor="reason" className={labelClass}>{t("Reason (optional)")}</label>

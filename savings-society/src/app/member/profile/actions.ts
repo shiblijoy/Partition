@@ -59,9 +59,8 @@ export async function requestDetailsChange(_prev: FormState, formData: FormData)
 export async function requestAccountDeletion(): Promise<void> {
   const viewer = await requireActiveMember();
   const open = await prisma.withdrawal.findFirst({ where: { memberId: viewer.userId, status: { in: ["PENDING", "APPROVED"] } } });
-  const member = await prisma.user.findUniqueOrThrow({ where: { id: viewer.userId } });
   if (open) await prisma.withdrawal.update({ where: { id: open.id }, data: { eraseData: true } });
-  else await prisma.withdrawal.create({ data: { memberId: viewer.userId, kind: "FULL", payTo: `bKash ${member.phone}`, reason: "Asked to delete their account", eraseData: true } });
+  else await prisma.withdrawal.create({ data: { memberId: viewer.userId, kind: "FULL", payTo: "Bank account to be confirmed with the admin", reason: "Asked to delete their account", eraseData: true } });
   await queueForAll(prisma, await adminIds(), { kind: "withdrawal_request", title: "Account deletion request", body: `${viewer.name} asked to delete their account (a full exit).`, url: "/admin/members" });
   await audit(viewer.userId, "member.deletion_requested", `${viewer.name} asked to delete their account`);
   changed();

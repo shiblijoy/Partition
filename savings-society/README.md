@@ -39,7 +39,7 @@ from the design, waiting for the society's real details.
 | Review proof | The uploaded proof, payment details, a three-point checklist before approving, required message when rejecting, then on to the next proof. |
 | Approvals | Pending / approved / rejected lists; undo or delete. |
 | Members | Withdrawal requests, member list with status (Active, Behind, Exiting, Left, Removed, Deceased) and search, add member with joining rule and temporary password + WhatsApp invite. |
-| Member detail | Profile and nominee, year payment grid, record a cash payment for several months (receipts issued), reset password, remove (opens a settlement), mark as deceased (opens a settlement to the nominee), restore. |
+| Member detail | Profile and nominee, year payment grid, record a bank payment for several months (receipts issued), reset password, remove (opens a settlement), mark as deceased (opens a settlement to the nominee), restore. |
 | Settlement | Settlement worked out from deposits, profit share, cost share and land gain (paid now or on sale); approve, decline, record the payout, issue the payout receipt. |
 | Fund & expenses | Totals, expenses with receipts, monthly collection chart, add expense. |
 | Investments | Cash, invested, profit, unrealised gain; votes in progress (close the vote → invest or reject, with a decision notice); per-investment valuation, profit payments, sell/close, documents; new proposal form with vote rule and cash check. |
@@ -48,7 +48,7 @@ from the design, waiting for the society's real details.
 | Notice board | Post meetings / reminders / decisions with attachments, share text for the WhatsApp group, read counts. |
 | Asset documents | Upload with versions (nothing is deleted), "seen by" counts, filters. |
 | Reports | Monthly report, annual summary, member statement, audit log and deposits grid — print to PDF, download CSV, share a summary with members. Draft until the month is closed. |
-| Accounts & ledger | Each society account (bank, bKash/Nagad, cash, FDRs) with its balance, moving money between accounts, and every ledger entry. |
+| Accounts & ledger | Each society account (bank, cash in hand, FDRs) with its balance, moving money between accounts, and every ledger entry. |
 | Settings | Society rules, monthly amount changes from a future month, second-admin limit, reminders, connections (WhatsApp/SMS/push), export everything (Excel workbook + ZIP of files), admins and auditors, and an admin handover both admins confirm. |
 
 ## The calculations
@@ -74,6 +74,9 @@ entry naming the society account it moved through. Nothing is typed in as a tota
   Estimated land/share gains are shown separately and count only once sold.
 - **Settlement** = deposits (less earlier withdrawals) + profit share − cost
   share (+ land share if paid now). It's frozen when approved.
+- **Bank payments only:** members pay by bank transfer or a deposit at the
+  branch; the app refuses any other method for deposits, and asks members
+  leaving the society for a bank account to be paid into.
 - **Who sees profit:** only admins and the auditor. Members see their deposits,
   their cost share and the costs list, never income, profit shares, gains or
   the fund's cash balance; their payout receipt shows the amount paid without

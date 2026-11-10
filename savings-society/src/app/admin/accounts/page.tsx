@@ -89,7 +89,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/admin/a
                     <input id="mv-date" name="date" type="date" defaultValue={dateInput()} max={dateInput()} className={inputClass} />
                   </div>
                 </div>
-                <input name="note" aria-label="Note" placeholder="e.g. bKash collections deposited at the bank" className={inputClass} />
+                <input name="note" aria-label="Note" placeholder="e.g. Moved to the FDR bank account" className={inputClass} />
               </ActionForm>
             </Card>
           )}
@@ -122,7 +122,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/admin/a
                     <div>
                       <label htmlFor="ac-type" className={labelClass}>Type</label>
                       <select id="ac-type" name="type" className={inputClass}>
-                        {["BANK", "MOBILE_WALLET", "CASH"].map((t) => <option key={t} value={t}>{ACCOUNT_TYPE_LABELS[t]}</option>)}
+                        {["BANK", "CASH"].map((t) => <option key={t} value={t}>{ACCOUNT_TYPE_LABELS[t]}</option>)}
                       </select>
                     </div>
                     <div>

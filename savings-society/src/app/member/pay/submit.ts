@@ -19,8 +19,8 @@ export async function handleSubmission(memberId: string, formData: FormData): Pr
   const confirmed = formData.get("confirmDuplicate") === "on" || formData.get("offline") === "1";
 
   if (months.length === 0) return { error: "Pick the month (or months) you're paying for." };
-  if (!Object.values(PaymentMethod).includes(method)) return { error: "Choose how you paid." };
-  if (method !== "CASH" && !reference) return { error: "Enter the transaction ID or reference so the admin can find it." };
+  if (method !== PaymentMethod.BANK) return { error: "Only bank payments are accepted." };
+  if (!reference) return { error: "Enter the bank transaction ID or reference so the admin can find it." };
   if (!(proof instanceof File) || proof.size === 0) return { error: "Add a screenshot or photo of your payment receipt." };
 
   // FR-PAY-09 / UC-03: a transaction ID used before is a warning; the member may still send it with a note.
