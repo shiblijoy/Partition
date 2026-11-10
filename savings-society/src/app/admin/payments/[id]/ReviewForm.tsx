@@ -3,9 +3,10 @@
 import { useActionState, useState } from "react";
 import { decidePayment } from "../actions";
 import type { FormState } from "@/components/ActionForm";
-import { labelClass, primaryButton, secondaryButton, textareaClass } from "@/components/ui";
+import { AccountSelect, type AccountOption } from "@/components/AccountSelect";
+import { inputClass, labelClass, primaryButton, secondaryButton, textareaClass } from "@/components/ui";
 
-export function ReviewForm({ paymentId, amount }: { paymentId: string; amount: string }) {
+export function ReviewForm({ paymentId, amount, accounts, paidOn, today }: { paymentId: string; amount: string; accounts: AccountOption[]; paidOn: string; today: string }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(decidePayment.bind(null, paymentId), {});
   const [checked, setChecked] = useState<string[]>([]);
   const checks: Array<[string, string]> = [
@@ -32,6 +33,13 @@ export function ReviewForm({ paymentId, amount }: { paymentId: string; amount: s
           </label>
         ))}
       </fieldset>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label htmlFor="receivedOn" className={labelClass}>Date money arrived</label>
+          <input id="receivedOn" name="receivedOn" type="date" required defaultValue={paidOn} max={today} className={inputClass} />
+        </div>
+        <AccountSelect accounts={accounts} label="Arrived in" id="review-account" />
+      </div>
       <div id="reject">
         <label htmlFor="message" className={labelClass}>Message to member (required if rejecting)</label>
         <textarea id="message" name="message" rows={3} placeholder="e.g. Amount not found in the society account. Please resubmit with the bank slip." className={textareaClass} />

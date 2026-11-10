@@ -1,76 +1,76 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { requireMember } from "@/lib/auth-guard";
-import { EDITABLE_FIELDS, FIELD_LABELS, validateField, type DetailChanges } from "@/lib/profile-fields";
+import { requireActiveMember, requireSession } from "@/lib/auth-guard";
+import { attempt, changed, text } from "@/lib/actions";
+import { pii } from "@/lib/crypto";
+import { audit } from "@/lib/audit";
+import { adminIds, queueForAll } from "@/lib/notify";
+import { EDITABLE_FIELDS, FIELD_LABELS, serializeChanges, validateField, type DetailChanges } from "@/lib/profile-fields";
 import type { FormState } from "@/components/ActionForm";
 
-function revalidateAll() {
-  revalidatePath("/member", "layout");
-  revalidatePath("/admin", "layout");
-}
-
 /**
- * The member edits their own details. Nothing changes yet: the edits wait as a
- * request until the admin approves them. A new edit replaces one still waiting.
+ * FR-MEM-08: the member edits their own details. Nothing changes yet: the edits
+ * wait as a request until the admin approves them. A new edit replaces one still waiting.
  */
 export async function proposeDetailsChange(_prev: FormState, formData: FormData): Promise<FormState> {
-  const session = await requireMember();
-  const member = await prisma.user.findUniqueOrThrow({ where: { id: session.userId } });
-
-  const changes: DetailChanges = {};
-  for (const [field] of EDITABLE_FIELDS) {
-    const to = String(formData.get(field) ?? "").trim() || null;
-    const from = member[field] ?? null;
-    if (to === from) continue; // untouched fields aren't checked: old values may predate these rules
-    const error = validateField(field, to);
-    if (error) return { error };
-    changes[field] = { from, to };
-  }
-  const fields = Object.keys(changes) as Array<keyof typeof FIELD_LABELS>;
-  if (fields.length === 0) return { error: "Nothing has changed." };
-
-  // A newer edit replaces one still waiting, so the admin only sees the latest.
-  await prisma.memberRequest.deleteMany({ where: { memberId: session.userId, status: "OPEN", changes: { not: null } } });
-  await prisma.memberRequest.create({
-    data: {
-      memberId: session.userId,
-      message: `Update ${fields.map((f) => FIELD_LABELS[f].toLowerCase()).join(", ")}`,
-      changes: JSON.stringify(changes),
-    },
+  return attempt(async () => {
+    const viewer = await requireActiveMember();
+    const member = pii(await prisma.user.findUniqueOrThrow({ where: { id: viewer.userId } }));
+    const changes: DetailChanges = {};
+    for (const [field] of EDITABLE_FIELDS) {
+      const to = text(formData, field);
+      const from = member[field] ?? null;
+      if (to === from) continue; // untouched fields aren't checked: old values may predate these rules
+      const error = validateField(field, to);
+      if (error) return { error };
+      changes[field] = { from, to };
+    }
+    const fields = Object.keys(changes) as Array<keyof typeof FIELD_LABELS>;
+    if (fields.length === 0) return { error: "Nothing has changed." };
+    await prisma.memberRequest.deleteMany({ where: { memberId: viewer.userId, status: "OPEN", changes: { not: null } } });
+    await prisma.memberRequest.create({ data: { memberId: viewer.userId, message: `Update ${fields.map((f) => FIELD_LABELS[f].toLowerCase()).join(", ")}`, changes: serializeChanges(changes) } });
+    await queueForAll(prisma, await adminIds(), { kind: "details_change", title: "Details change to approve", body: `${viewer.name} edited their details.`, url: `/admin/members/${viewer.userId}` });
+    changed();
+    return { ok: "Sent to the admin. Your details change once they approve." };
   });
-  revalidateAll();
-  return { ok: "Sent to the admin. Your details change once they approve." };
 }
 
 export async function cancelDetailsChange(requestId: string): Promise<void> {
-  const session = await requireMember();
-  await prisma.memberRequest.deleteMany({ where: { id: requestId, memberId: session.userId, status: "OPEN" } });
-  revalidateAll();
+  const viewer = await requireActiveMember();
+  await prisma.memberRequest.deleteMany({ where: { id: requestId, memberId: viewer.userId, status: "OPEN" } });
+  changed();
 }
 
-/** Name and mobile number are changed by the admin only; members ask in free text. */
+/** FR-AUTH-11: name and mobile number are changed by the admin only; members ask in free text. */
 export async function requestDetailsChange(_prev: FormState, formData: FormData): Promise<FormState> {
-  const session = await requireMember();
-  const message = String(formData.get("message") ?? "").trim();
-  if (!message) return { error: "Say what should change." };
-  await prisma.memberRequest.create({ data: { memberId: session.userId, message } });
-  revalidateAll();
-  return { ok: "Sent. The admin will update your details." };
+  return attempt(async () => {
+    const viewer = await requireActiveMember();
+    const message = text(formData, "message");
+    if (!message) return { error: "Say what should change." };
+    await prisma.memberRequest.create({ data: { memberId: viewer.userId, message } });
+    changed();
+    return { ok: "Sent. The admin will update your details." };
+  });
 }
 
-/** Deleting an account means leaving the society: it's a full withdrawal that also erases personal details once paid. */
+/** FR-MEM-11: deleting an account means leaving the society — a full withdrawal that erases personal details once paid. */
 export async function requestAccountDeletion(): Promise<void> {
-  const session = await requireMember();
-  const open = await prisma.withdrawal.findFirst({ where: { memberId: session.userId, status: { in: ["PENDING", "APPROVED"] } } });
-  const member = await prisma.user.findUniqueOrThrow({ where: { id: session.userId } });
-  if (open) {
-    await prisma.withdrawal.update({ where: { id: open.id }, data: { eraseData: true } });
-  } else {
-    await prisma.withdrawal.create({
-      data: { memberId: session.userId, kind: "FULL", payTo: `bKash ${member.phone}`, reason: "Asked to delete their account", eraseData: true },
-    });
-  }
-  revalidateAll();
+  const viewer = await requireActiveMember();
+  const open = await prisma.withdrawal.findFirst({ where: { memberId: viewer.userId, status: { in: ["PENDING", "APPROVED"] } } });
+  const member = await prisma.user.findUniqueOrThrow({ where: { id: viewer.userId } });
+  if (open) await prisma.withdrawal.update({ where: { id: open.id }, data: { eraseData: true } });
+  else await prisma.withdrawal.create({ data: { memberId: viewer.userId, kind: "FULL", payTo: `bKash ${member.phone}`, reason: "Asked to delete their account", eraseData: true } });
+  await queueForAll(prisma, await adminIds(), { kind: "withdrawal_request", title: "Account deletion request", body: `${viewer.name} asked to delete their account (a full exit).`, url: "/admin/members" });
+  await audit(viewer.userId, "member.deletion_requested", `${viewer.name} asked to delete their account`);
+  changed();
+}
+
+/** NFR-USE-02: the member picks Bangla or English. */
+export async function setLanguage(lang: "en" | "bn"): Promise<void> {
+  const viewer = await requireSession();
+  await prisma.user.update({ where: { id: viewer.userId }, data: { language: lang } });
+  (await cookies()).set("lang", lang, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+  changed();
 }

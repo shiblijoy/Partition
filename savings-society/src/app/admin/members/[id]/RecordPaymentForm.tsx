@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ActionForm } from "@/components/ActionForm";
 import { fileClass, inputClass, labelClass, METHOD_LABELS } from "@/components/ui";
 import { recordPayment } from "../actions";
+import { AccountSelect, type AccountOption } from "@/components/AccountSelect";
 
 const chip = (on: boolean) =>
   `flex h-11 cursor-pointer items-center justify-center rounded-xl bg-white px-3 text-[13px] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand/40 ${
@@ -13,17 +14,18 @@ const chip = (on: boolean) =>
 export function RecordPaymentForm({
   memberId,
   months,
-  monthly,
   currency,
   today,
+  accounts,
 }: {
   memberId: string;
-  months: Array<{ key: string; label: string }>;
-  monthly: number;
+  months: Array<{ key: string; label: string; amount: number }>;
   currency: string;
   today: string;
+  accounts: AccountOption[];
 }) {
-  const [picked, setPicked] = useState<string[]>([months[0].key]);
+  const [picked, setPicked] = useState<string[]>(months[0] ? [months[0].key] : []);
+  const total = months.filter((m) => picked.includes(m.key)).reduce((s, m) => s + m.amount, 0);
   const [method, setMethod] = useState("CASH");
 
   return (
@@ -62,6 +64,7 @@ export function RecordPaymentForm({
           <label htmlFor="reference" className={labelClass}>Reference (optional)</label>
           <input id="reference" name="reference" className={inputClass} />
         </div>
+        <AccountSelect accounts={accounts} label="Received into" id="rec-account" />
       </div>
       <div>
         <label htmlFor="proof" className={labelClass}>Attach photo of cash receipt (optional)</label>
@@ -69,7 +72,7 @@ export function RecordPaymentForm({
       </div>
       <div className="flex items-center justify-between rounded-xl bg-paper px-4 py-3 text-sm">
         <span className="text-muted">{picked.length} month(s) · marked &ldquo;Recorded by admin&rdquo;</span>
-        <strong className="text-lg">{currency} {new Intl.NumberFormat("en-IN").format(picked.length * monthly)}</strong>
+        <strong className="text-lg">{currency} {new Intl.NumberFormat("en-IN").format(total)}</strong>
       </div>
     </ActionForm>
   );

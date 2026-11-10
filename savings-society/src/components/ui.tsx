@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { monthLabel } from "@/lib/months";
 import type { MonthStatus } from "@/lib/ledger";
 import { Icon } from "@/components/icons";
+import { translate, monthName } from "@/lib/i18n";
 
 export type Tone = "good" | "warn" | "bad" | "neutral" | "brand";
 
@@ -35,12 +35,15 @@ const STATUS: Record<string, [Tone, string]> = {
   CLOSED: ["neutral", "Closed"],
   OPEN: ["warn", "Open"],
   DONE: ["neutral", "Done"],
+  REVERSED: ["neutral", "Reversed"],
+  DUE: ["bad", "Due"],
+  PASSED: ["good", "Passed"],
 };
 
 /** Pill for one of the app's status enums. */
-export function Badge({ label }: { label: string }) {
+export function Badge({ label, lang = "en" }: { label: string; lang?: string }) {
   const [tone, text] = STATUS[label] ?? ["neutral", label.replaceAll("_", " ").toLowerCase()];
-  return <Pill tone={tone}>{text}</Pill>;
+  return <Pill tone={tone}>{translate(lang, text)}</Pill>;
 }
 
 export function StatCard({
@@ -175,29 +178,33 @@ export function Line({ label, value, tone, total }: { label: React.ReactNode; va
 
 const MONTH_STYLES: Record<MonthStatus, string> = {
   paid: "bg-brand text-white",
-  partial: "bg-[#C98A3A] text-white",
+  pending: "bg-[#C98A3A] text-white",
   due: "bg-bad-bg text-bad",
   upcoming: "bg-paper text-muted",
   "before-join": "bg-white text-field",
 };
 
-export function MonthCell({ month, status }: { month: string; status: MonthStatus }) {
+const MONTH_WORD: Record<MonthStatus, string> = { paid: "Paid", pending: "Waiting", due: "Due", upcoming: "Upcoming", "before-join": "Before joining" };
+
+/** One month in a payment grid. The status is always written out too, never colour alone (§6.1). */
+export function MonthCell({ month, status, lang = "en" }: { month: string; status: MonthStatus; lang?: string }) {
   return (
     <div
-      title={`${monthLabel(month, "long")}: ${status.replace("-", " ")}`}
+      title={`${monthName(month, lang, "long")}: ${translate(lang, MONTH_WORD[status])}`}
+      aria-label={`${monthName(month, lang, "long")}: ${translate(lang, MONTH_WORD[status])}`}
       className={`rounded-lg px-1 py-1.5 text-center text-[11px] font-bold ${MONTH_STYLES[status]}`}
     >
-      {monthLabel(month).split(" ")[0]}
-      <span className="block text-[10px] font-semibold opacity-80">{month.slice(2, 4)}</span>
+      {monthName(month, lang).split(" ")[0].slice(0, lang === "bn" ? 4 : 3)}
+      <span className="block text-[10px] font-semibold opacity-80">{status === "paid" ? "✓" : status === "pending" ? "…" : status === "due" ? "!" : month.slice(2, 4)}</span>
     </div>
   );
 }
 
-export function MonthLegend() {
+export function MonthLegend({ lang = "en" }: { lang?: string }) {
   const items: Array<[MonthStatus, string]> = [
-    ["paid", "Paid"],
-    ["partial", "Part paid"],
-    ["due", "Due"],
+    ["paid", "✓ Paid"],
+    ["pending", "… Waiting"],
+    ["due", "! Due"],
     ["upcoming", "Upcoming"],
   ];
   return (
@@ -205,7 +212,7 @@ export function MonthLegend() {
       {items.map(([status, label]) => (
         <span key={status} className="flex items-center gap-1.5">
           <span className={`inline-block h-3 w-3 rounded ${MONTH_STYLES[status]}`} />
-          {label}
+          {translate(lang, label)}
         </span>
       ))}
     </div>
@@ -242,12 +249,15 @@ export const METHOD_LABELS: Record<string, string> = {
 
 export const CATEGORY_LABELS: Record<string, string> = {
   BANK_CHARGE: "Bank charges",
+  TAX: "Tax deducted at source",
   TRANSFER_FEE: "Transfer fee",
   MEETING: "Meeting",
   STATIONERY: "Printing & stationery",
   LEGAL: "Legal / registration",
   OTHER: "Other",
 };
+
+export const ACCOUNT_TYPE_LABELS: Record<string, string> = { BANK: "Bank", MOBILE_WALLET: "bKash / Nagad", CASH: "Cash in hand", FDR: "FDR" };
 
 export const INVESTMENT_KIND_LABELS: Record<string, string> = { LAND: "Land", BUSINESS: "Business", SHARES: "Shares" };
 

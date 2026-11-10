@@ -1,10 +1,15 @@
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
-import { PrismaClient, PaymentMethod } from "@prisma/client";
+import { PrismaClient, type PaymentMethod } from "@prisma/client";
 import { hashPassword } from "../src/lib/password";
 import { addMonths, currentMonth, isMonthKey, monthRange } from "../src/lib/months";
-import { newVerifyCode } from "../src/lib/receipts";
+import { encryptPii } from "../src/lib/crypto";
+import { getSettings } from "../src/lib/settings";
+import { approvePayment, rejectPayment, submitPayments } from "../src/lib/services/payments";
+import { addExpense, addIncome, openFdr, transfer } from "../src/lib/services/books";
+import { cashAt } from "../src/lib/books";
+import { closeInvestment, proposeInvestment, recordProfit, recordValuation, startInvestment } from "../src/lib/services/investments";
 
 const prisma = new PrismaClient();
 const STORAGE = path.resolve(process.env.STORAGE_DIR || path.join(process.cwd(), "storage"));
@@ -55,17 +60,23 @@ async function main() {
     create: {
       id: 1,
       societyName: "Dreamhive",
-      monthlyAmount: 10000,
       currencySymbol: "৳",
       startMonth,
-      ...(demo
-        ? {
-            paymentInfo: "bKash (society): 01XXXXXXXXX\nBank: [Bank], A/C [number]",
-            cashAccounts: "[Bank] savings ••XXXX\nbKash (society number)\nCash with treasurer",
-          }
-        : {}),
+      ...(demo ? { paymentInfo: "bKash (society): 01XXXXXXXXX\nBank: [Bank], A/C ending 4821" } : {}),
     },
   });
+  await prisma.monthlyRate.upsert({ where: { fromMonth: startMonth }, update: {}, create: { fromMonth: startMonth, amount: Number(process.env.SEED_MONTHLY_AMOUNT ?? 10000), createdBy: "setup" } });
+  if ((await prisma.account.count()) === 0) {
+    await prisma.account.createMany({
+      data: demo
+        ? [
+            { name: "[Bank] savings", type: "BANK", last4: "4821" },
+            { name: "bKash (society number)", type: "MOBILE_WALLET", last4: "7702" },
+            { name: "Cash with treasurer", type: "CASH" },
+          ]
+        : [{ name: "Society bank account", type: "BANK" }],
+    });
+  }
 
   const admin = await prisma.user.upsert({
     where: { phone: adminPhone },
@@ -74,6 +85,7 @@ async function main() {
       name: process.env.SEED_ADMIN_NAME ?? (demo ? "[Admin name]" : "Admin"),
       phone: adminPhone,
       email: adminEmail,
+      contactPhone: process.env.SEED_ADMIN_WHATSAPP || null,
       passwordHash: await hashPassword(adminPassword),
       role: "ADMIN",
       joinMonth: startMonth,
@@ -84,6 +96,11 @@ async function main() {
   if ((await prisma.user.count({ where: { role: "MEMBER" } })) > 0 || !demo) {
     console.log("Skipping demo data.");
   } else {
+    const settings = await getSettings();
+    const actor = { id: admin.id, name: admin.name };
+    const accounts = await prisma.account.findMany();
+    const acc = (method: PaymentMethod) => accounts.find((a) => a.type === (method === "BANK" ? "BANK" : method === "CASH" ? "CASH" : "MOBILE_WALLET"))!.id;
+    const bank = accounts.find((a) => a.type === "BANK")!.id;
     const password = await hashPassword("Member123!");
     const names = [
       "Sabbir Rahman", "Nusrat Jahan", "Kamal Hossain", "Mitu Chowdhury", "Farhana Akter", "Tanvir Islam", "Rahim Ahmed", "Shirin Sultana",
@@ -95,138 +112,134 @@ async function main() {
     const pendingNow = ["Rahim Ahmed", "Nusrat Jahan", "Kamal Hossain", "Farhana Akter", "Tanvir Islam"];
     const unpaidNow = ["Sabbir Rahman", "Mitu Chowdhury", "Arif Hasan", "Shirin Sultana", "Jahid Karim"];
     const methods: PaymentMethod[] = ["BKASH", "BANK", "BKASH", "NAGAD"];
-    let receipt = 0;
-    const receiptNo = (month: string) => `DH-${month.slice(2, 4)}${month.slice(5)}-${String(++receipt).padStart(3, "0")}`;
+    const pay = async (memberId: string, month: string, method: PaymentMethod, reference: string, paidOn: Date, reviewed: Date) => {
+      const [p] = await submitPayments(settings, { memberId, months: [month], method, reference, paidOn, proofPath: null, note: null });
+      await approvePayment(settings, p.id, { receivedOn: paidOn, accountId: acc(method), actor, at: reviewed });
+    };
 
+    // Expenses and investments are dated through the months, so they're recorded in date order with the deposits.
+    const members: Array<{ id: string; name: string; i: number; phone: string }> = [];
     for (const [i, name] of names.entries()) {
-      const phone = `01${String(711 + i * 101).slice(-3)}${String(100000 + i * 7919).slice(-6)}`;
+      const phone = name === "Rahim Ahmed" ? "01711111111" : `01${String(711 + i * 101).slice(-3)}${String(100000 + i * 7919).slice(-6)}`;
       const member = await prisma.user.create({
         data: {
           name,
-          phone: name === "Rahim Ahmed" ? "01711111111" : phone,
+          phone,
           memberNo: i + 1,
           passwordHash: password,
           role: "MEMBER",
           joinMonth: startMonth,
-          nid: `19${String(8800000000000 + i * 1234567).slice(0, 11)}`,
-          dateOfBirth: "[DD Mon YYYY]",
-          address: "[House, Road, Area, City]",
-          nomineeName: "[Nominee name]",
-          nomineeRelation: i % 2 ? "Wife" : "Husband",
-          nomineePhone: "01XXX-XXXXXX",
-          nomineeNid: `19${String(7700000000000 + i * 7654321).slice(0, 11)}`,
+          createdAt: day(startMonth, 1),
+          ...encryptPii({
+            nid: `19${String(8800000000000 + i * 1234567).slice(0, 11)}`,
+            dateOfBirth: "[DD Mon YYYY]",
+            address: "[House, Road, Area, City]",
+            nomineeName: "[Nominee name]",
+            nomineeRelation: i % 2 ? "Wife" : "Husband",
+            nomineePhone: "01700000000",
+            nomineeNid: `19${String(7700000000000 + i * 7654321).slice(0, 11)}`,
+          }),
         },
       });
-      const paidMonths = months.slice(0, months.length - (behind[name] ?? 0));
-      for (const [k, month] of paidMonths.entries()) {
-        const rejectedFirst = name === "Rahim Ahmed" && k === 5;
-        if (rejectedFirst) {
-          await prisma.payment.create({
-            data: {
-              memberId: member.id, forMonth: month, amount: 10000, method: "BANK", reference: "SLIP-2291", paidOn: day(month, 5),
-              status: "REJECTED", reviewedById: admin.id, reviewedAt: day(month, 6),
-              reviewNote: "Amount not found in society account. Please resubmit with the bank slip.", createdAt: day(month, 5),
-            },
-          });
+      members.push({ id: member.id, name, i, phone });
+    }
+
+    for (const [k, month] of months.entries()) {
+      for (const m of members) {
+        if (k >= months.length - (behind[m.name] ?? 0)) continue;
+        if (m.name === "Rahim Ahmed" && k === 5) {
+          const [bad] = await submitPayments(settings, { memberId: m.id, months: [month], method: "BANK", reference: "SLIP-2291", paidOn: day(month, 5), proofPath: null, note: null });
+          await rejectPayment(settings, bad.id, "Amount not found in society account. Please resubmit with the bank slip", actor);
+          await pay(m.id, month, "BANK", "SLIP-2291B", day(month, 8), day(month, 9));
+          continue;
         }
-        await prisma.payment.create({
-          data: {
-            memberId: member.id, forMonth: month, amount: 10000, method: methods[(i + k) % methods.length],
-            reference: `${(i * 31 + k * 7).toString(36).toUpperCase()}${month.replace("-", "")}X`, paidOn: day(month, rejectedFirst ? 8 : 3 + (i % 5)),
-            status: "APPROVED", reviewedById: admin.id, reviewedAt: day(month, rejectedFirst ? 9 : 4 + (i % 5)),
-            receiptNo: receiptNo(month), verifyCode: newVerifyCode(), createdAt: day(month, 3 + (i % 5)),
-          },
-        });
+        await pay(m.id, month, methods[(m.i + k) % methods.length], `${(m.i * 31 + k * 7).toString(36).toUpperCase()}${month.replace("-", "")}X`, day(month, 3 + (m.i % 5)), day(month, 4 + (m.i % 5)));
       }
-      if (pendingNow.includes(name)) {
-        await prisma.payment.create({
-          data: {
-            memberId: member.id, forMonth: now, amount: 10000, method: name === "Rahim Ahmed" ? "BKASH" : methods[i % 4],
-            reference: name === "Rahim Ahmed" ? "8KJ2M4XQ7P" : `PND${i}${now.replace("-", "")}`, paidOn: new Date(),
-            proofPath: await placeholderPdf(`Payment screenshot from ${name}`, `proofs/${member.id}`), note: name === "Farhana Akter" ? "Cash given to treasurer, receipt #112" : null,
-          },
-        });
-      } else if (!unpaidNow.includes(name)) {
-        await prisma.payment.create({
-          data: {
-            memberId: member.id, forMonth: now, amount: 10000, method: methods[i % 4], reference: `NOW${i}${now.replace("-", "")}`, paidOn: day(now, 1),
-            status: "APPROVED", reviewedById: admin.id, reviewedAt: day(now, 1, 18), receiptNo: receiptNo(now), verifyCode: newVerifyCode(),
-          },
-        });
-      }
-      if (name === "Arif Hasan") {
-        await prisma.withdrawal.create({ data: { memberId: member.id, kind: "FULL", payTo: `bKash ${member.phone}`, reason: "Moving abroad", createdAt: day(now, 1) } });
+      if (k === 0) await addExpense(settings, { date: day(month, 10), category: "LEGAL", amount: 2500, description: "Account opening & stamps", receiptPath: null, accountId: bank, actor });
+      if (k === 2) await addExpense(settings, { date: day(month, 15), category: "BANK_CHARGE", amount: 575, description: "Account maintenance fee", receiptPath: null, accountId: bank, actor });
+      if (k === 6) await addExpense(settings, { date: day(month, 12), category: "STATIONERY", amount: 3600, description: "Member passbooks (24)", receiptPath: null, accountId: bank, actor });
+      await addExpense(settings, { date: day(month, 27), category: "MEETING", amount: 1100, description: "Monthly meeting refreshments", receiptPath: null, accountId: bank, actor });
+      // The treasurer moves the month's bKash/Nagad and cash collections into the bank.
+      for (const a of accounts.filter((x) => x.type !== "BANK")) {
+        const held = await cashAt(prisma, undefined, a.id);
+        if (held > 0) await transfer({ fromId: a.id, toId: bank, amount: held, date: day(month, 28), note: `${a.name} collections deposited at the bank`, actor });
       }
     }
+    await addExpense(settings, { date: day(addMonths(now, -1), 15), category: "BANK_CHARGE", amount: 575, description: "Account maintenance fee", receiptPath: null, accountId: bank, actor });
 
-    // Expenses
-    await prisma.expense.createMany({
-      data: [
-        { date: day(startMonth, 10), category: "LEGAL", amount: 2500, description: "Account opening & stamps", createdById: admin.id },
-        { date: day(addMonths(startMonth, 2), 15), category: "BANK_CHARGE", amount: 575, description: "Account maintenance fee", createdById: admin.id },
-        { date: day(addMonths(startMonth, 6), 12), category: "STATIONERY", amount: 3600, description: "Member passbooks (24)", createdById: admin.id },
-        ...monthRange(startMonth, addMonths(now, -1)).map((m) => ({ date: day(m, 27), category: "MEETING" as const, amount: 1100, description: "Monthly meeting refreshments", createdById: admin.id })),
-        { date: day(addMonths(now, -1), 15), category: "BANK_CHARGE", amount: 575, description: "Account maintenance fee", createdById: admin.id },
-      ],
-    });
-
-    // Investments
-    const land = await prisma.investment.create({
-      data: {
-        kind: "LAND", name: "5 katha plot, [Location]", details: "Registered in society name · deed no. [____]", plan: "Hold, sell or build",
-        amount: 1200000, status: "ACTIVE", voteRule: "TWO_THIRDS", startedAt: day(addMonths(startMonth, 3), 15), currentValue: 1350000,
-      },
-    });
-    const farm = await prisma.investment.create({
-      data: { kind: "BUSINESS", name: "[Partner] poultry farm", details: "Monthly payout", plan: "30% of monthly profit", amount: 500000, status: "ACTIVE", startedAt: day(addMonths(startMonth, 5), 1) },
-    });
-    const shop = await prisma.investment.create({
-      data: {
-        kind: "BUSINESS", name: "[Shop name] stock financing", details: "3-month term", plan: "12% fixed profit",
-        amount: 200000, status: "CLOSED", startedAt: day(addMonths(startMonth, 2), 1), closedAt: day(addMonths(startMonth, 5), 1), returnedAmount: 224000,
-      },
-    });
-    const proposal = await prisma.investment.create({
-      data: { kind: "LAND", name: "Buy 3 katha land, [Location]", plan: "Hold 3 years", amount: 600000, voteRule: "MAJORITY", voteEndsAt: day(now, 9, 23) },
-    });
-    const members = await prisma.user.findMany({ where: { role: "MEMBER" }, orderBy: { memberNo: "asc" } });
-    for (const [i, m] of members.slice(0, 11).entries()) {
-      if (m.name === "Rahim Ahmed") continue;
-      await prisma.vote.create({ data: { investmentId: proposal.id, memberId: m.id, choice: i % 5 === 4 ? "NO" : "YES" } });
-    }
-
-    // Income
+    // Investments: approved by vote earlier, paid out from the bank.
+    const passed = async (data: { kind: "LAND" | "BUSINESS"; name: string; details: string; plan: string; amount: number; voteRule: "MAJORITY" | "TWO_THIRDS" }, started: Date) => {
+      const inv = await prisma.investment.create({ data: { ...data, status: "PASSED", voteClosedAt: started } });
+      await startInvestment(settings, inv.id, { accountId: bank, date: started, actor });
+      return inv;
+    };
+    const shop = await passed({ kind: "BUSINESS", name: "[Shop name] stock financing", details: "3-month term", plan: "12% fixed profit", amount: 200000, voteRule: "MAJORITY" }, day(addMonths(startMonth, 2), 1));
+    const land = await passed({ kind: "LAND", name: "5 katha plot, [Location]", details: "Registered in society name · deed no. [____]", plan: "Hold, sell or build", amount: 1200000, voteRule: "TWO_THIRDS" }, day(addMonths(startMonth, 3), 15));
+    await closeInvestment(settings, shop.id, { returned: 224000, date: day(addMonths(startMonth, 5), 1), accountId: bank, actor });
+    const farm = await passed({ kind: "BUSINESS", name: "[Partner] poultry farm", details: "Monthly payout", plan: "30% of monthly profit", amount: 500000, voteRule: "MAJORITY" }, day(addMonths(startMonth, 5), 1));
+    await recordValuation(land.id, 1350000, actor);
     for (const m of monthRange(addMonths(startMonth, 6), addMonths(now, -1))) {
-      await prisma.income.create({ data: { kind: "INVESTMENT_PROFIT", amount: 15000, date: day(m, 28), investmentId: farm.id, description: `Profit from ${farm.name}`, account: "[Bank] savings ••XXXX" } });
+      await recordProfit(settings, farm.id, { amount: 15000, date: day(m, 28), accountId: bank, actor });
     }
-    await prisma.income.create({ data: { kind: "BANK_INTEREST", amount: 2400, date: day(addMonths(now, -1), 28), account: "[Bank] savings ••XXXX", description: "Bank interest, last quarter" } });
-    await prisma.fdr.create({ data: { bank: "[Bank] FDR · 6 months", amount: 300000, openedOn: day(addMonths(now, -3), 15), maturesOn: day(addMonths(now, 3), 15) } });
+    await addIncome(settings, { kind: "BANK_INTEREST", amount: 2400, date: day(addMonths(now, -1), 28), accountId: bank, description: "Bank interest, last quarter", filePath: null, actor });
+    await openFdr({ fromId: bank, name: "[Bank] FDR · 6 months", amount: 300000, rate: 9.5, openedOn: day(addMonths(now, -3), 15), maturesOn: day(addMonths(now, 3), 15), actor });
+
+    // This month: a few paid, five waiting for approval, five not yet.
+    for (const m of members) {
+      if (pendingNow.includes(m.name)) {
+        await submitPayments(settings, {
+          memberId: m.id,
+          months: [now],
+          method: m.name === "Rahim Ahmed" ? "BKASH" : methods[m.i % 4],
+          reference: m.name === "Rahim Ahmed" ? "8KJ2M4XQ7P" : `PND${m.i}${now.replace("-", "")}`,
+          paidOn: new Date(),
+          proofPath: await placeholderPdf(`Payment screenshot from ${m.name}`, `proofs/${m.id}`),
+          note: m.name === "Farhana Akter" ? "Cash given to treasurer, receipt #112" : null,
+        });
+      } else if (!unpaidNow.includes(m.name)) {
+        await pay(m.id, now, methods[m.i % 4], `NOW${m.i}${now.replace("-", "")}`, day(now, 1), day(now, 1, 18));
+      }
+      if (m.name === "Arif Hasan") await prisma.withdrawal.create({ data: { memberId: m.id, kind: "FULL", payTo: `bKash ${m.phone}`, reason: "Moving abroad", createdAt: day(now, 1) } });
+    }
+
+    // A vote in progress.
+    const ends = new Date(Date.now() + 6 * 86_400_000);
+    const proposal = await proposeInvestment(settings, { kind: "LAND", name: "Buy 3 katha land, [Location]", plan: "Hold 3 years", details: null, amount: 600000, voteRule: "MAJORITY", voteEndsAt: ends, actor });
+    for (const m of members.slice(0, 11)) {
+      if (m.name === "Rahim Ahmed") continue;
+      await prisma.vote.create({ data: { investmentId: proposal.id, memberId: m.id, choice: m.i % 5 === 4 ? "NO" : "YES" } });
+    }
 
     // Documents
-    const docs: Array<[string, string, string | null, "LAND" | "BUSINESS" | "SOCIETY"]> = [
-      ["Sale deed (dalil)", "Sale deed (dalil)", land.id, "LAND"],
-      ["Khatian", "Khatian (record of rights)", land.id, "LAND"],
-      ["Mutation (namjari)", "Mutation (namjari) certificate", land.id, "LAND"],
-      ["Land tax receipt", "Land tax receipt", land.id, "LAND"],
-      ["Agreement", "Partnership agreement", farm.id, "BUSINESS"],
-      ["Profit statement", "Profit statements", farm.id, "BUSINESS"],
-      ["Agreement", "Stock financing agreement", shop.id, "BUSINESS"],
-      ["Constitution (bylaws)", "Constitution (bylaws)", null, "SOCIETY"],
+    const docs: Array<[string, string, string | null, "LAND" | "BUSINESS" | "SOCIETY", boolean]> = [
+      ["Sale deed (dalil)", "Sale deed (dalil)", land.id, "LAND", false],
+      ["Khatian", "Khatian (record of rights)", land.id, "LAND", false],
+      ["Mutation (namjari)", "Mutation (namjari) certificate", land.id, "LAND", false],
+      ["Land tax receipt", "Land tax receipt", land.id, "LAND", false],
+      ["Agreement", "Partnership agreement", farm.id, "BUSINESS", false],
+      ["Profit statement", "Profit statements", farm.id, "BUSINESS", false],
+      ["Agreement", "Stock financing agreement", shop.id, "BUSINESS", false],
+      ["Constitution (bylaws)", "Constitution (bylaws)", null, "SOCIETY", false],
+      ["Bank account document", "Bank signatory mandate", null, "SOCIETY", true],
+      ["Survey map", "Survey map (proposal)", proposal.id, "LAND", false],
     ];
-    for (const [docType, title, investmentId, assetType] of docs) {
-      await prisma.document.create({ data: { docType, title, investmentId, assetType, filePath: await placeholderPdf(title) } });
+    for (const [docType, title, investmentId, assetType, adminOnly] of docs) {
+      await prisma.document.create({ data: { docType, title, investmentId, assetType, adminOnly, filePath: await placeholderPdf(title) } });
     }
 
     // Notices
     await prisma.notice.createMany({
       data: [
-        { kind: "DECISION", title: "Last meeting decisions", body: "Bank interest will be shared with members. Minutes attached.", createdAt: day(addMonths(now, -1), 12) },
-        { kind: "REMINDER", title: "Deposit due by the 10th", body: "Upload your proof after paying. Cash can be handed to the treasurer.", createdAt: day(now, 1, 9) },
-        { kind: "VOTE", title: "Vote open: 3 katha land", body: "Please vote in the Invest tab before the 9th.", createdAt: day(now, 1, 10) },
-        { kind: "MEETING", title: "Monthly meeting", body: "Agenda: land proposal vote result, last month's accounts, new member requests.", eventAt: day(now, 9, 20), place: "[Meeting place]", createdAt: new Date() },
+        { kind: "DECISION", title: "Last meeting decisions", body: "Bank interest will be shared with members.", minutes: "Present: 21 of 24.\n1. Bank interest is shared with members (unanimous).\n2. Next land proposal to be voted in the app.", createdAt: day(addMonths(now, -1), 12) },
+        { kind: "REMINDER", title: `Deposit due by the ${settings.reminderDay}th`, body: "Upload your proof after paying. Cash can be handed to the treasurer.", createdAt: day(now, 1, 9) },
+        { kind: "MEETING", title: "Monthly meeting", body: "Agenda: land proposal vote result, last month's accounts, new member requests.", eventAt: day(now, 9, 20), place: "[Meeting place]", investmentId: proposal.id, createdAt: new Date() },
       ],
     });
 
+    // Payouts and investments above 5 lakh need a second admin from now on (NFR-SEC-07).
+    await prisma.setting.update({ where: { id: 1 }, data: { dualApprovalLimit: 500000 } });
+    // Demo notifications count as already delivered and read.
+    await prisma.notification.updateMany({ data: { pushedAt: new Date(), readAt: new Date() } });
     await prisma.auditLog.create({ data: { actorId: admin.id, action: "seed", detail: "Demo data created" } });
     console.log("Demo members created — log in as 01711111111 (Rahim Ahmed) / Member123!");
   }

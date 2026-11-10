@@ -1,0 +1,11 @@
+# Runs Dreamhive's scheduled jobs once: vote deadlines, due reminders, FDR maturity
+# reminders, the nominee check, and delivering notifications. Started by dreamhive-jobs.timer.
+[Unit]
+Description=Dreamhive scheduled jobs
+After=dreamhive.service
+
+[Service]
+Type=oneshot
+User=dreamhive
+EnvironmentFile=/opt/dreamhive/savings-society/.env
+ExecStart=/usr/bin/curl -fsS -H "Authorization: Bearer ${CRON_SECRET}" http://127.0.0.1:3000/api/cron

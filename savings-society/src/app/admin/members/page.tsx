@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { requireStaff } from "@/lib/auth-guard";
 import { getSettings, money } from "@/lib/settings";
 import { membersWithLedgers } from "@/lib/society";
 import { currentMonth, monthLabel, monthRange } from "@/lib/months";
+import { sumRates } from "@/lib/rates";
 import { fmtDay } from "@/lib/format";
 import { Card, Empty, PageHeader, Pill, inputClass, type Tone } from "@/components/ui";
 import { AddMemberForm } from "./AddMemberForm";
 
 export default async function MembersPage({ searchParams }: PageProps<"/admin/members">) {
+  const viewer = await requireStaff();
   const { q } = await searchParams;
   const query = String(q ?? "").trim().toLowerCase();
   const settings = await getSettings();
@@ -16,19 +19,21 @@ export default async function MembersPage({ searchParams }: PageProps<"/admin/me
     prisma.withdrawal.findMany({ where: { status: { in: ["PENDING", "APPROVED"] } }, include: { member: true }, orderBy: { createdAt: "asc" } }),
   ]);
   const $ = (n: number) => money(n, settings.currencySymbol);
-  const exiting = new Set(open.map((w) => w.memberId));
+  const exiting = new Set(open.filter((w) => w.kind !== "LAND_SHARE").map((w) => w.memberId));
   const current = members.filter((m) => m.active && !m.exit);
   const shown = members.filter((m) => !query || m.name.toLowerCase().includes(query) || m.phone.includes(query));
-  const catchUpTotal = monthRange(settings.startMonth, currentMonth()).length * settings.monthlyAmount;
+  const catchUpTotal = sumRates(monthRange(settings.startMonth, currentMonth()), settings.rates);
 
+  // FR-MEM-03 statuses; BR-04: Behind when any past month since joining has no approved payment.
   const status = (m: (typeof members)[number]): [Tone, string] => {
     if (m.exit === "LEFT") return ["neutral", "Left"];
     if (m.exit === "REMOVED") return ["bad", "Removed"];
-    if (m.exit === "DECEASED" || (!m.active && !m.exit)) return ["neutral", m.active ? "Inactive" : "Deceased"];
+    if (m.exit === "DECEASED" || !m.active) return ["neutral", "Deceased"];
     if (exiting.has(m.id)) return ["warn", "Exiting"];
-    if (m.ledger.due > settings.monthlyAmount) return ["bad", "Behind"];
+    if (m.ledger.behind) return ["bad", "Behind"];
     return ["good", "Active"];
   };
+  const KIND = { FULL: "Full exit", PARTIAL: "Partial", NOMINEE: "Settlement to nominee", LAND_SHARE: "Owed land share" } as const;
 
   return (
     <div className="flex flex-col gap-6">
@@ -42,12 +47,12 @@ export default async function MembersPage({ searchParams }: PageProps<"/admin/me
                 <div>
                   <div className="font-bold">{w.member.name}</div>
                   <div className="text-[13px] text-muted">
-                    {w.kind === "FULL" ? (w.exitAs === "REMOVED" ? "Removal" : "Full exit") : w.kind === "NOMINEE" ? "Settlement to nominee" : `Partial · ${$(w.amount ?? 0)}`} · requested {fmtDay(w.createdAt)}
+                    {w.exitAs === "REMOVED" ? "Removal" : KIND[w.kind]}{w.kind === "PARTIAL" && ` · ${$(w.amount ?? 0)}`} · requested {fmtDay(w.createdAt)}
                     {w.reason && ` · “${w.reason}”`}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Pill tone="warn">{w.status === "PENDING" ? "Waiting for admin" : `Approved · ${$(w.payable ?? 0)}`}</Pill>
+                  <Pill tone="warn">{w.status === "PENDING" ? (w.firstApprover ? "Needs second admin" : "Waiting for admin") : `Approved · ${$(w.payable ?? 0)}`}</Pill>
                   <Link href={`/admin/withdrawals/${w.id}`} className="text-[13px] font-bold">Open settlement →</Link>
                 </div>
               </li>
@@ -75,7 +80,7 @@ export default async function MembersPage({ searchParams }: PageProps<"/admin/me
                   <tr className="border-b border-line text-left text-xs font-bold text-muted">
                     <th className="px-4 py-2.5 sm:px-2">Member</th>
                     <th className="px-2 py-2.5">Joined</th>
-                    <th className="px-2 py-2.5">Paid</th>
+                    <th className="px-2 py-2.5">Months paid</th>
                     <th className="px-2 py-2.5 text-right">Deposits</th>
                     <th className="px-2 py-2.5">Status</th>
                   </tr>
@@ -91,11 +96,15 @@ export default async function MembersPage({ searchParams }: PageProps<"/admin/me
                             {m.memberNo != null && <span className="text-muted">#{String(m.memberNo).padStart(2, "0")} </span>}
                             {m.name}
                           </Link>
-                          <div className="text-xs text-muted">{m.phone}{m.pendingCount > 0 && <span className="text-warn"> · {m.pendingCount} pending</span>}</div>
+                          <div className="text-xs text-muted">
+                            {m.phone}
+                            {m.pendingCount > 0 && <span className="text-warn"> · {m.pendingCount} pending</span>}
+                            {!m.hasNominee && !gone && <span className="text-bad"> · no nominee</span>}
+                          </div>
                         </td>
-                        <td className="px-2 py-3 text-muted">{monthLabel(m.joinMonth)}</td>
+                        <td className="px-2 py-3 text-muted">{monthLabel(m.joinMonth)}{m.joiningRule === "PAY_BACK" && <span className="block text-xs">pays back</span>}</td>
                         <td className="px-2 py-3">
-                          {Math.floor(m.ledger.paid / settings.monthlyAmount + 1e-9)} / {m.ledger.monthsOwed}
+                          {m.ledger.monthsPaid} / {m.ledger.monthsOwed}
                           {m.ledger.due > 0 && !gone && <span className="text-bad"> · owes {$(m.ledger.due)}</span>}
                         </td>
                         <td className="px-2 py-3 text-right font-bold">{$(m.ledger.paid)}</td>
@@ -110,9 +119,11 @@ export default async function MembersPage({ searchParams }: PageProps<"/admin/me
           <p className="mt-3 text-xs text-muted">Open a member to record a payment, reset their password, or remove them (removing creates a settlement like a withdrawal).</p>
         </Card>
 
-        <Card title="Add member" className="flex-[1_1_320px]">
-          <AddMemberForm thisMonth={currentMonth()} catchUpLabel={$(catchUpTotal)} startLabel={monthLabel(settings.startMonth)} />
-        </Card>
+        {viewer.role === "ADMIN" && (
+          <Card title="Add member" className="flex-[1_1_320px]">
+            <AddMemberForm thisMonth={currentMonth()} catchUpLabel={$(catchUpTotal)} startLabel={monthLabel(settings.startMonth)} />
+          </Card>
+        )}
       </div>
     </div>
   );

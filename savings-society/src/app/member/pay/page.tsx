@@ -1,38 +1,34 @@
-import { prisma } from "@/lib/prisma";
 import { requireMember } from "@/lib/auth-guard";
 import { getSettings, money } from "@/lib/settings";
-import { memberLedger } from "@/lib/ledger";
-import { approvedTotalFor } from "@/lib/society";
-import { addMonths, monthLabel } from "@/lib/months";
+import { ledgerFor } from "@/lib/society";
+import { openMonths } from "@/lib/services/payments";
+import { rateFor } from "@/lib/rates";
 import { dateInput } from "@/lib/format";
-import { ScreenHeader } from "@/components/ui";
+import { tFor, monthName } from "@/lib/i18n";
+import { Notice, ScreenHeader } from "@/components/ui";
 import { PayForm } from "./PayForm";
 
 export default async function PayPage() {
-  const session = await requireMember();
-  const [settings, member, approvedTotal, pending] = await Promise.all([
-    getSettings(),
-    prisma.user.findUniqueOrThrow({ where: { id: session.userId } }),
-    approvedTotalFor(session.userId),
-    prisma.payment.findMany({ where: { memberId: session.userId, status: "PENDING" } }),
-  ]);
-  const ledger = memberLedger(member, approvedTotal, settings);
-
-  // Offer the months not yet covered by approved or pending money, oldest first.
-  const pendingMonths = pending.reduce((n, p) => n + p.monthsCount, 0);
-  const firstOpen = addMonths(ledger.paidThrough ? addMonths(ledger.paidThrough, 1) : ledger.firstMonth, pendingMonths);
-  const months = Array.from({ length: 6 }, (_, i) => addMonths(firstOpen, i)).map((key) => ({
-    key,
-    label: monthLabel(key),
-    due: ledger.statusFor(key) === "due",
-  }));
+  const viewer = await requireMember();
+  const t = tFor(viewer.language);
+  const settings = await getSettings();
+  if (viewer.readOnly) {
+    return (
+      <div>
+        <ScreenHeader title={t("Submit payment")} back="/member" />
+        <Notice tone="neutral">{t("Your membership has ended, so your account is read-only.")}</Notice>
+      </div>
+    );
+  }
+  const [ledger, open] = await Promise.all([ledgerFor(viewer.userId, settings), openMonths(viewer.userId, settings, 8)]);
+  // FR-PAY-01/07: the current month or advance months, never one already pending or approved.
+  const months = open.map((key) => ({ key, label: monthName(key, viewer.language), due: ledger.statusFor(key) === "due", amount: rateFor(key, settings.rates) }));
 
   return (
     <div>
-      <ScreenHeader title="Submit payment" back="/member" />
+      <ScreenHeader title={t("Submit payment")} back="/member" />
       <PayForm
         months={months}
-        monthly={settings.monthlyAmount}
         currency={settings.currencySymbol}
         monthlyLabel={money(settings.monthlyAmount, settings.currencySymbol)}
         paymentInfo={settings.paymentInfo}

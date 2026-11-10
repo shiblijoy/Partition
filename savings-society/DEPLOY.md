@@ -134,12 +134,24 @@ cat > .env <<EOF
 DATABASE_URL="file:/var/lib/dreamhive/dreamhive.db"
 STORAGE_DIR="/var/lib/dreamhive/storage"
 AUTH_SECRET="$(openssl rand -hex 32)"
+DATA_KEY="$(openssl rand -base64 32)"
+CRON_SECRET="$(openssl rand -hex 24)"
+APP_URL="https://YOUR-DOMAIN-HERE"
 EOF
 chown dreamhive:dreamhive .env && chmod 600 .env
 ```
 
-`AUTH_SECRET` signs everyone's logins. Don't share it. If you change it later,
-everyone is logged out.
+- `AUTH_SECRET` signs everyone's logins. Don't share it. If you change it later,
+  everyone is logged out.
+- `DATA_KEY` encrypts members' NID numbers, addresses and nominee details. **Keep a
+  copy somewhere safe off the server** (with your backups): without it, those
+  fields can't be read after a restore.
+- `APP_URL` goes into the QR code on every receipt. Replace `YOUR-DOMAIN-HERE`.
+- `CRON_SECRET` lets the jobs timer (step 9) run the scheduled jobs.
+
+WhatsApp, SMS and push notifications are optional and added later: see
+[WhatsApp](#whatsapp-login-codes-passwords-and-reminders),
+[Push notifications](#push-notifications) and the [Android app](#android-app-google-play).
 
 ## 8. Install, create the database and the first admin, and build
 
@@ -178,6 +190,14 @@ systemctl daemon-reload && systemctl enable --now dreamhive
 systemctl status dreamhive --no-pager    # should say "active (running)"
 ```
 
+Turn on the scheduled jobs (vote deadlines, due reminders, FDR maturity reminders,
+the nominee check, notifications), every 15 minutes:
+
+```bash
+cp deploy/dreamhive-jobs.service deploy/dreamhive-jobs.timer /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now dreamhive-jobs.timer
+```
+
 Point Caddy at it. Put your domain in the Caddyfile, then reload:
 
 ```bash
@@ -191,7 +211,8 @@ see the Dreamhive login page with a padlock.
 
 ## 10. Set up nightly backups
 
-Back up at 2:30 every night, keeping 30 days:
+Back up at 2:30 every night. Daily backups are kept 30 days, and the first backup
+of every month is kept 7 years (in `/var/backups/dreamhive/monthly`):
 
 ```bash
 echo '30 2 * * * root /opt/dreamhive/savings-society/deploy/backup.sh >> /var/log/dreamhive-backup.log 2>&1' > /etc/cron.d/dreamhive-backup
@@ -215,14 +236,21 @@ $1 a month; turning that on is a good extra safety net.
 
 1. Open `https://your-domain` and log in with the admin **email** and temporary
    password from step 8. Set your own password.
-2. **Settings:** society name, monthly deposit, reminder day, first month,
-   where members should send money, and the society's accounts.
-3. **Enter past amounts** (deposits, expenses, income) before using
-   *Close month* — a closed month is locked.
-4. **Members → Add member** for each member. Send each one their invite with the
-   *Send invite on WhatsApp* button. Members log in with their mobile number and
-   set their own password.
-5. Tell members to open the site on their phone and choose **Add to Home Screen**.
+2. **Settings:** society name, reminder day, first month, where members should
+   send money, the second-admin limit, and your own WhatsApp number (for the
+   login code). The monthly deposit is set there too; a change applies from a
+   future month only.
+3. **Accounts & ledger:** add each account the society keeps money in (bank,
+   bKash/Nagad, cash in hand) with only its last 4 digits, and its balance on the
+   day you start using the app.
+4. **Enter past amounts** (deposits with *Record payment*, expenses, income)
+   before using *Close month* — a closed month is locked.
+5. **Members → Add member** for each member, with their nominee. With WhatsApp
+   connected the temporary password is sent automatically; otherwise use the
+   *Send it on WhatsApp yourself* button. Members log in with their mobile number
+   and set their own password.
+6. Tell members to open the site on their phone and choose **Add to Home Screen**
+   (or install the Android app, below), then turn on notifications from the bell.
 
 ## Updating to a new version
 
@@ -235,6 +263,101 @@ sudo /opt/dreamhive/savings-society/deploy/update.sh
 It backs up first, then downloads the new code, updates the database, rebuilds
 and restarts. The app is unavailable for the minute or two the build takes.
 
+**Upgrading from the first version (before the ledger):** the same command does
+it. After the database update, `prisma/upgrade.ts` runs once and turns the old
+records into the new books: the old account list becomes society accounts, FDRs
+become FDR accounts, multi-month payments become one payment per month, every
+approved payment gets its receipt, every past deposit, expense, income,
+investment and payout goes on the ledger, each member's share of past costs and
+profits is worked out, and NID and nominee details are encrypted. Afterwards,
+check *Accounts & ledger*: the upgrade puts expenses, income and investments on
+the first bank account and deposits on the account matching their method, so
+move money between accounts there if your real balances differ. Add a `DATA_KEY`
+to `.env` (step 7) before upgrading; if you don't, a key is derived from
+`AUTH_SECRET`, so don't change `AUTH_SECRET` afterwards.
+
+## WhatsApp: login codes, passwords and reminders
+
+The app sends four WhatsApp template messages through Meta's WhatsApp Business
+Platform (Cloud API): `login_code` (authentication: the 6-digit admin login
+code, with a copy-code button), `temp_password` (authentication), `payment_due`
+and `payment_rejected` (utility).
+
+1. In [Meta Business Suite](https://business.facebook.com) create a business
+   account (registered in Bangladesh), then a WhatsApp app at
+   [developers.facebook.com](https://developers.facebook.com), and add the
+   society's phone number.
+2. Create the four templates with exactly those names and these bodies, and wait
+   for Meta to approve them:
+   - `login_code`: Meta's authentication template, with a copy-code button.
+   - `temp_password`: `Hi {{1}}, your Dreamhive temporary password is {{2}}. Log in with your mobile number and set your own password.`
+   - `payment_due`: `Hi {{1}}, your Dreamhive deposit for {{2}} of {{3}} is due. Please pay and upload the proof in the app.`
+   - `payment_rejected`: `Hi {{1}}, your Dreamhive payment for {{2}} was not approved: {{3}}. Please submit it again in the app.`
+3. Create a permanent access token (a System User token with
+   `whatsapp_business_messaging`) and note the phone number ID.
+4. Add to `.env`, then `systemctl restart dreamhive`:
+
+   ```bash
+   WHATSAPP_TOKEN="EAAG…"
+   WHATSAPP_PHONE_NUMBER_ID="1234567890"
+   ```
+
+From then on, admins with a WhatsApp number in *Settings → My account* get a
+login code, new members and password resets get their temporary password, the
+reminder day sends `payment_due`, and a rejected payment sends
+`payment_rejected`. Every message is logged with its WhatsApp message ID (for
+cost tracking); *Settings → Connections* shows what is connected.
+
+**SMS fallback:** if WhatsApp fails twice or isn't set up, the app sends an SMS
+through any gateway that takes a URL. Set
+`SMS_GATEWAY_URL="https://your-sms-provider/send?key=…&to={to}&msg={text}"`
+(`{to}` and `{text}` are filled in; add `SMS_GATEWAY_METHOD="POST"` if it needs POST).
+
+## Push notifications
+
+Members get a push for approvals, rejections, receipts, votes, withdrawals and
+notices once they tap *Turn on notifications* in the app. Create the keys once
+with `sudo -u dreamhive npx web-push generate-vapid-keys` in the app folder, add
+them to `.env`, then restart:
+
+```bash
+VAPID_PUBLIC_KEY="…"
+VAPID_PRIVATE_KEY="…"
+VAPID_SUBJECT="mailto:treasurer@example.com"
+```
+
+Push works on Android in Chrome and in the Android app, and on iPhones (iOS
+16.4+) once the app has been added to the home screen.
+
+## Android app (Google Play)
+
+The member app is published to Google Play as a Trusted Web Activity: an
+Android app that opens the website full-screen, with its own icon and push
+notifications. You build it once with Google's Bubblewrap tool on any computer
+with Node.js and Java:
+
+```bash
+npm i -g @bubblewrap/cli
+bubblewrap init --manifest https://YOUR-DOMAIN-HERE/manifest.json
+#   package name, e.g. org.dreamhive.app — it creates a signing key: keep it safe
+bubblewrap build                     # makes app-release-bundle.aab (and an .apk to test)
+bubblewrap fingerprint list          # the SHA-256 fingerprint of your key
+```
+
+Add the package name and fingerprint to the server's `.env` (with Play App
+Signing on, also add the fingerprint from Play Console → App integrity,
+comma-separated), then restart:
+
+```bash
+ANDROID_PACKAGE="org.dreamhive.app"
+ANDROID_SHA256="AB:CD:…"
+```
+
+Check that `https://YOUR-DOMAIN-HERE/.well-known/assetlinks.json` shows them,
+then upload the `.aab` in the Play Console. The store listing needs the privacy
+policy link, `https://YOUR-DOMAIN-HERE/privacy`. Account deletion, which Play
+requires, is in the app under *My profile → Delete my account*.
+
 ## When something goes wrong
 
 | Problem | What to do |
@@ -242,6 +365,7 @@ and restarts. The app is unavailable for the minute or two the build takes.
 | Site doesn't load | `systemctl status dreamhive` and `journalctl -u dreamhive -n 100` show the app's errors. |
 | No padlock / certificate error | DNS isn't pointing at the server yet (step 2), or ports 80/443 are blocked. `journalctl -u caddy -n 50` shows why. |
 | Build runs out of memory | Check swap is on: `swapon --show` (step 4). |
+| "Account locked" | 5 wrong passwords lock an account for 15 minutes. The admin can unlock a member early on their page. |
 | Admin forgot the password | Another admin resets it in *Settings*. With only one admin, run on the server: `cd /opt/dreamhive/savings-society && sudo -u dreamhive -H env SEED_DEMO=0 SEED_ADMIN_EMAIL=new@example.com SEED_ADMIN_PHONE=01700000001 SEED_ADMIN_PASSWORD=Temporary123 npx tsx prisma/seed.ts` to add a new admin, then log in with it. |
 
 ### Restoring from a backup
@@ -255,3 +379,6 @@ cp -a /tmp/restore/storage/. /var/lib/dreamhive/storage/
 chown -R dreamhive:dreamhive /var/lib/dreamhive
 systemctl start dreamhive
 ```
+
+The restored database needs the same `DATA_KEY` (and `AUTH_SECRET`) as before;
+they're in `.env`, and in the copy you kept from step 7.

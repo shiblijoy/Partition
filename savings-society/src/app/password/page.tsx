@@ -5,13 +5,16 @@ import { logout } from "@/app/login/actions";
 import { Icon } from "@/components/icons";
 import { Notice, secondaryButton } from "@/components/ui";
 import { ChangePasswordForm } from "@/components/ChangePasswordForm";
+import { I18nProvider } from "@/components/I18n";
+import { tFor } from "@/lib/i18n";
 
 /** Account & password. Also where anyone on a temporary password is sent to set their own. */
 export default async function PasswordPage() {
   const session = await requireSession({ allowTemporaryPassword: true });
   const user = await prisma.user.findUniqueOrThrow({ where: { id: session.userId } });
   const first = user.mustChangePassword;
-  const back = user.role === "ADMIN" ? "/admin/settings" : "/member/profile";
+  const t = tFor(user.role === "MEMBER" ? user.language : "en");
+  const back = user.role === "MEMBER" ? "/member/profile" : "/admin/settings";
 
   return (
     <div className="mx-auto w-full max-w-md px-5 py-6">
@@ -21,11 +24,11 @@ export default async function PasswordPage() {
             <Icon name="back" size={22} />
           </Link>
         )}
-        <h1 className={`text-xl font-bold ${first ? "ml-3" : ""}`}>{first ? "Set your password" : "Account & password"}</h1>
+        <h1 className={`text-xl font-bold ${first ? "ml-3" : ""}`}>{first ? t("Set your password") : t("Account & password")}</h1>
       </div>
 
       <div className="flex flex-col gap-5">
-        {first && <Notice tone="warn">You logged in with a temporary password from the admin. Set your own password to continue.</Notice>}
+        {first && <Notice tone="warn">{t("You logged in with a temporary password from the admin. Set your own password to continue.")}</Notice>}
 
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white p-4">
           <div className="min-w-0">
@@ -35,13 +38,13 @@ export default async function PasswordPage() {
             </p>
             <p className="text-[13px] text-muted">{user.phone}</p>
           </div>
-          <p className="text-right text-xs leading-snug text-muted">Name and number<br />changed by admin</p>
+          <p className="text-right text-xs leading-snug text-muted">{t("Name and number")}<br />{t("changed by admin")}</p>
         </div>
 
-        <ChangePasswordForm temporary={first} />
+        <I18nProvider lang={user.role === "MEMBER" ? user.language : "en"}><ChangePasswordForm temporary={first} /></I18nProvider>
 
         <form action={logout}>
-          <button className={`w-full ${secondaryButton}`}>Log out</button>
+          <button className={`w-full ${secondaryButton}`}>{t("Log out")}</button>
         </form>
       </div>
     </div>

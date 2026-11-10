@@ -1,3 +1,5 @@
+import { decrypt, encrypt } from "@/lib/crypto";
+
 /**
  * Personal details a member can propose changes to. Name and mobile number are
  * left out: the mobile number is their login, so only the admin changes those.
@@ -30,10 +32,15 @@ export function validateField(field: EditableField, value: string | null): strin
   return null;
 }
 
+/** Pending edits hold NID numbers, so the JSON is stored encrypted (NFR-LEG-02). */
+export function serializeChanges(changes: DetailChanges): string {
+  return encrypt(JSON.stringify(changes))!;
+}
+
 export function parseChanges(json: string | null): DetailChanges {
   if (!json) return {};
   try {
-    return JSON.parse(json) as DetailChanges;
+    return JSON.parse(decrypt(json) ?? "{}") as DetailChanges;
   } catch {
     return {};
   }

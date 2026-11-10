@@ -11,9 +11,11 @@ import { inputClass, smallButton, smallSecondary } from "@/components/ui";
 export function PendingDetailsChange({
   request,
   showMember = false,
+  canEdit = true,
 }: {
   request: { id: string; memberId: string; changes: string | null; createdAt: Date; member: { name: string } };
   showMember?: boolean;
+  canEdit?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-3 rounded-2xl border-2 border-[#E8B567] bg-white p-4">
@@ -24,7 +26,7 @@ export function PendingDetailsChange({
         <span className="text-xs font-extrabold tracking-wide text-warn">NEEDS APPROVAL</span>
       </div>
       <ChangeList changes={parseChanges(request.changes)} />
-      <div className="flex flex-wrap items-start gap-2">
+      {canEdit && <div className="flex flex-wrap items-start gap-2">
         <ConfirmButton action={approveDetailsChange.bind(null, request.id)} confirmText={`Apply ${request.member.name}'s changes?`} className={smallButton}>
           Approve changes
         </ConfirmButton>
@@ -34,7 +36,7 @@ export function PendingDetailsChange({
             <input name="note" required aria-label="Reason, shown to the member" placeholder="Reason, shown to the member" className={`${inputClass} mt-0 h-10 w-64`} />
           </ActionForm>
         </details>
-      </div>
+      </div>}
     </div>
   );
 }

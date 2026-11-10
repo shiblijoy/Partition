@@ -4,14 +4,15 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
 import { hashPassword, verifyPassword } from "@/lib/password";
-import { createSession } from "@/lib/session";
+import { revokeSessions } from "@/lib/session";
+import { audit } from "@/lib/audit";
 
 export type PasswordState = { error?: string; ok?: boolean };
 
 /**
- * Changes the signed-in user's password. Other devices are signed out (their
- * sessions predate passwordChangedAt); this one gets a fresh session. Someone
- * on a temporary password is taken on to the app once they've set their own.
+ * Changes the signed-in user's password (FR-AUTH-04/05). Every other device is
+ * signed out (FR-AUTH-06); this one stays. Someone on a temporary password is
+ * taken on to the app once they've set their own (FR-AUTH-03).
  */
 export async function changePassword(_prev: PasswordState, formData: FormData): Promise<PasswordState> {
   const session = await requireSession({ allowTemporaryPassword: true });
@@ -29,14 +30,10 @@ export async function changePassword(_prev: PasswordState, formData: FormData): 
   }
   if (current === next) return { error: "Choose a password different from the current one." };
 
-  // Second precision, matching the JWT's iat: the new session below stays valid.
-  const changedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { passwordHash: await hashPassword(next), mustChangePassword: false, passwordChangedAt: changedAt },
-  });
-  await createSession({ userId: user.id, name: user.name, role: user.role });
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(next), mustChangePassword: false, passwordChangedAt: new Date() } });
+  await revokeSessions(user.id, session.sid);
+  await audit(user.id, "password.changed", `${user.name} ${user.mustChangePassword ? "set their own password" : "changed their password"}; other devices signed out`);
 
-  if (user.mustChangePassword) redirect(user.role === "ADMIN" ? "/admin" : "/member");
+  if (user.mustChangePassword) redirect(user.role === "MEMBER" ? "/member" : "/admin");
   return { ok: true };
 }

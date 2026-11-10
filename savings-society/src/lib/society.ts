@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { memberLedger, type Ledger } from "@/lib/ledger";
-import type { Settings } from "@/lib/settings";
+import { cashAt, type Db } from "@/lib/books";
+import { paisaToTaka, type Settings } from "@/lib/settings";
 
 /**
- * Who counts as a member for dues and sharing profit and costs. A member who
- * has been settled out keeps their login (\`active\`) until they confirm the
- * payout, but stops counting as soon as \`exit\` is set.
+ * Who counts as a member for dues and for sharing new costs and profits. A
+ * member who has been settled out keeps their login for a while, but stops
+ * counting as soon as `exit` is set.
  */
 export const CURRENT_MEMBER = { active: true, exit: null } as const;
 
@@ -16,25 +17,29 @@ export type MemberWithLedger = {
   phone: string;
   email: string | null;
   joinMonth: string;
+  joiningRule: string;
   active: boolean;
   exit: string | null;
   createdAt: Date;
+  hasNominee: boolean;
   pendingCount: number;
   ledger: Ledger;
 };
 
-/** Every member with their approved total worked into a ledger. */
+/** Every member with their approved months worked into a ledger. */
 export async function membersWithLedgers(settings: Settings, opts: { includeInactive?: boolean } = {}) {
   const [members, approved, pending] = await Promise.all([
     prisma.user.findMany({
       where: { role: "MEMBER", ...(opts.includeInactive ? {} : CURRENT_MEMBER) },
       orderBy: [{ memberNo: "asc" }, { name: "asc" }],
     }),
-    prisma.payment.groupBy({ by: ["memberId"], where: { status: "APPROVED" }, _sum: { amount: true } }),
-    prisma.payment.groupBy({ by: ["memberId"], where: { status: "PENDING" }, _count: { _all: true } }),
+    prisma.payment.findMany({ where: { status: "APPROVED" }, select: { memberId: true, forMonth: true, amount: true } }),
+    prisma.payment.findMany({ where: { status: "PENDING" }, select: { memberId: true, forMonth: true } }),
   ]);
-  const approvedBy = new Map(approved.map((row) => [row.memberId, row._sum.amount ?? 0]));
-  const pendingBy = new Map(pending.map((row) => [row.memberId, row._count._all]));
+  const approvedBy = new Map<string, Array<{ forMonth: string; amount: number }>>();
+  for (const p of approved) approvedBy.set(p.memberId, [...(approvedBy.get(p.memberId) ?? []), p]);
+  const pendingBy = new Map<string, string[]>();
+  for (const p of pending) pendingBy.set(p.memberId, [...(pendingBy.get(p.memberId) ?? []), p.forMonth]);
 
   return members.map<MemberWithLedger>((m) => ({
     id: m.id,
@@ -43,126 +48,116 @@ export async function membersWithLedgers(settings: Settings, opts: { includeInac
     phone: m.phone,
     email: m.email,
     joinMonth: m.joinMonth,
+    joiningRule: m.joiningRule,
     active: m.active,
     exit: m.exit,
     createdAt: m.createdAt,
-    pendingCount: pendingBy.get(m.id) ?? 0,
-    ledger: memberLedger(m, approvedBy.get(m.id) ?? 0, settings),
+    hasNominee: !!m.nomineeName,
+    pendingCount: pendingBy.get(m.id)?.length ?? 0,
+    ledger: memberLedger(m, approvedBy.get(m.id) ?? [], settings, { pending: pendingBy.get(m.id) }),
   }));
 }
 
-export async function approvedTotalFor(memberId: string): Promise<number> {
-  const agg = await prisma.payment.aggregate({
-    where: { memberId, status: "APPROVED" },
-    _sum: { amount: true },
-  });
+/** One member's ledger: approved and pending months. */
+export async function ledgerFor(memberId: string, settings: Settings, asOf?: string) {
+  const [member, approved, pending] = await Promise.all([
+    prisma.user.findUniqueOrThrow({ where: { id: memberId } }),
+    prisma.payment.findMany({ where: { memberId, status: "APPROVED" }, select: { forMonth: true, amount: true } }),
+    prisma.payment.findMany({ where: { memberId, status: "PENDING" }, select: { forMonth: true } }),
+  ]);
+  return memberLedger(member, approved, settings, { pending: pending.map((p) => p.forMonth), asOf });
+}
+
+export async function approvedTotalFor(memberId: string, db: Db = prisma): Promise<number> {
+  const agg = await db.payment.aggregate({ where: { memberId, status: "APPROVED" }, _sum: { amount: true } });
   return agg._sum.amount ?? 0;
 }
 
 /**
- * The society's money position.
- *
- * - Cash = approved deposits − costs + profit − money still invested − payouts.
- * - Profit = recorded income (bank interest, investment profit, …) plus the gain
- *   (or loss) on investments that have been closed.
- * - Profit and costs are shared equally by active members. A member who has
- *   left took their share with them (snapshotted on their settlement), so the
- *   remaining pool is split across whoever is still active.
- * - Estimated land/share gain is reported separately and only becomes profit
- *   once the asset is sold.
+ * The society's money position, all from the ledger:
+ * Cash = deposits − expenses − invested + capital returned + income − payouts (+ opening balances).
+ * Profit = income + gain (or loss) on investments that have been closed.
+ * Estimated land/share gain is reported separately and only becomes profit once sold.
  */
-export async function fundSummary() {
-  const [collected, spent, pending, activeMembers, income, investments, settled, partials] = await Promise.all([
-    prisma.payment.aggregate({ where: { status: "APPROVED" }, _sum: { amount: true } }),
-    prisma.expense.aggregate({ _sum: { amount: true } }),
-    prisma.payment.aggregate({ where: { status: "PENDING" }, _sum: { amount: true }, _count: { _all: true } }),
-    prisma.user.count({ where: { role: "MEMBER", ...CURRENT_MEMBER } }),
-    prisma.income.aggregate({ _sum: { amount: true } }),
-    prisma.investment.findMany({ where: { status: { in: ["ACTIVE", "CLOSED"] } } }),
-    prisma.withdrawal.findMany({ where: { status: "PAID", kind: { in: ["FULL", "NOMINEE"] } } }),
-    prisma.withdrawal.aggregate({ where: { status: "PAID", kind: "PARTIAL" }, _sum: { payable: true } }),
+export async function fundSummary(db: Db = prisma) {
+  const [byType, opening, pending, current, investments, costs, profits] = await Promise.all([
+    db.ledgerEntry.groupBy({ by: ["type"], _sum: { amount: true } }),
+    db.account.aggregate({ _sum: { openingBalance: true } }),
+    db.payment.aggregate({ where: { status: "PENDING" }, _sum: { amount: true }, _count: { _all: true } }),
+    db.user.findMany({ where: { role: "MEMBER", ...CURRENT_MEMBER }, select: { id: true } }),
+    db.investment.findMany({ where: { status: { in: ["ACTIVE", "CLOSED"] } } }),
+    db.allocation.groupBy({ by: ["memberId"], where: { sourceType: "expense" }, _sum: { paisa: true } }),
+    db.allocation.groupBy({ by: ["memberId"], where: { sourceType: { in: ["income", "gain"] } }, _sum: { paisa: true } }),
   ]);
-
-  const totalCollected = collected._sum.amount ?? 0;
-  const totalExpenses = spent._sum.amount ?? 0;
-  const recordedIncome = income._sum.amount ?? 0;
+  const sum = (t: string) => byType.find((r) => r.type === t)?._sum.amount ?? 0;
+  const totalCollected = sum("DEPOSIT");
+  const totalExpenses = -sum("EXPENSE");
+  const totalIncome = sum("INCOME");
+  const paidOut = -sum("PAYOUT");
+  const openingBalance = opening._sum.openingBalance ?? 0;
+  const cash = openingBalance + byType.reduce((s, r) => s + (r._sum.amount ?? 0), 0);
 
   const active = investments.filter((i) => i.status === "ACTIVE");
   const closed = investments.filter((i) => i.status === "CLOSED");
   const invested = active.reduce((s, i) => s + i.amount, 0);
   const closedGain = closed.reduce((s, i) => s + ((i.returnedAmount ?? i.amount) - i.amount), 0);
-  const totalProfit = recordedIncome + closedGain;
-  const unrealisedGain = active
-    .filter((i) => i.currentValue != null)
-    .reduce((s, i) => s + ((i.currentValue ?? i.amount) - i.amount), 0);
+  const unrealisedGain = active.filter((i) => i.currentValue != null).reduce((s, i) => s + ((i.currentValue ?? i.amount) - i.amount), 0);
 
-  const paidOutSettlements = settled.reduce((s, w) => s + (w.payable ?? 0), 0);
-  const paidOutPartial = partials._sum.payable ?? 0;
-  const profitTaken = settled.reduce((s, w) => s + (w.profitShare ?? 0), 0);
-  const costTaken = settled.reduce((s, w) => s + (w.costShare ?? 0), 0);
-  const landTaken = settled.filter((w) => w.landTiming === "NOW").reduce((s, w) => s + (w.landShare ?? 0), 0);
-
-  const balance = totalCollected - totalExpenses + totalProfit - paidOutSettlements - paidOutPartial; // the fund, incl. what's invested
-  const cash = balance - invested;
-  const per = (n: number) => (activeMembers > 0 ? n / activeMembers : 0);
+  const ids = new Set(current.map((m) => m.id));
+  const avg = (rows: Array<{ memberId: string; _sum: { paisa: number | null } }>) =>
+    ids.size ? rows.filter((r) => ids.has(r.memberId)).reduce((s, r) => s + (r._sum.paisa ?? 0), 0) / ids.size / 100 : 0;
 
   return {
     totalCollected,
     totalExpenses,
-    totalProfit,
+    totalIncome,
+    closedGain,
+    totalProfit: totalIncome + closedGain,
     invested,
     activeInvestments: active.length,
     unrealisedGain,
-    paidOut: paidOutSettlements + paidOutPartial,
-    balance,
+    paidOut,
+    openingBalance,
     cash,
+    balance: cash + invested, // the fund, including what's invested
     pendingAmount: pending._sum.amount ?? 0,
     pendingCount: pending._count._all,
-    activeMembers,
-    expenseSharePerMember: per(totalExpenses - costTaken),
-    profitSharePerMember: per(totalProfit - profitTaken),
-    landSharePerMember: per(unrealisedGain - landTaken),
+    activeMembers: ids.size,
+    expenseSharePerMember: -avg(costs), // average of current members (each member's own share is in memberPosition)
+    profitSharePerMember: avg(profits),
+    landSharePerMember: ids.size ? Math.max(unrealisedGain, 0) / ids.size : 0,
   };
 }
 
 export type FundSummary = Awaited<ReturnType<typeof fundSummary>>;
 
-/** One member's stake: what they'd get if they left today. */
-export async function memberPosition(memberId: string, fund: FundSummary) {
-  const [deposits, partial] = await Promise.all([
-    approvedTotalFor(memberId),
-    prisma.withdrawal.aggregate({ where: { memberId, status: "PAID", kind: "PARTIAL" }, _sum: { payable: true } }),
+/** One member's stake: what they'd get if they left today (whole taka; shares kept in paisa until then). */
+export async function memberPosition(memberId: string, fund?: FundSummary, db: Db = prisma) {
+  const f = fund ?? (await fundSummary(db));
+  const [deposits, partial, cost, profit] = await Promise.all([
+    approvedTotalFor(memberId, db),
+    db.withdrawal.aggregate({ where: { memberId, status: "PAID", kind: "PARTIAL" }, _sum: { payable: true } }),
+    db.allocation.aggregate({ where: { memberId, sourceType: "expense" }, _sum: { paisa: true } }),
+    db.allocation.aggregate({ where: { memberId, sourceType: { in: ["income", "gain"] } }, _sum: { paisa: true } }),
   ]);
   const withdrawn = partial._sum.payable ?? 0;
-  const profitShare = fund.profitSharePerMember;
-  const costShare = fund.expenseSharePerMember;
+  const costPaisa = -(cost._sum.paisa ?? 0);
+  const profitPaisa = profit._sum.paisa ?? 0;
+  const profitShare = paisaToTaka(profitPaisa);
+  const costShare = paisaToTaka(costPaisa);
   return {
     deposits,
     withdrawn,
     profitShare,
     costShare,
-    landShare: fund.landSharePerMember,
+    costPaisa,
+    profitPaisa,
+    landShare: Math.round(f.landSharePerMember),
+    // Built from the rounded parts, so a settlement adds up on paper.
     net: deposits - withdrawn + profitShare - costShare,
   };
 }
 
-/**
- * Cash the books say the society held at the end of a day (deposits, costs,
- * income, investments and payouts dated up to then). Compared with the real
- * account statements when a month is closed. FDRs count as cash: they're the
- * society's own accounts.
- */
-export async function cashAsOf(end: Date): Promise<number> {
-  const [collected, spent, income, investments, payouts] = await Promise.all([
-    prisma.payment.aggregate({ where: { status: "APPROVED", paidOn: { lte: end } }, _sum: { amount: true } }),
-    prisma.expense.aggregate({ where: { date: { lte: end } }, _sum: { amount: true } }),
-    prisma.income.aggregate({ where: { date: { lte: end } }, _sum: { amount: true } }),
-    prisma.investment.findMany({ where: { status: { in: ["ACTIVE", "CLOSED"] }, startedAt: { lte: end } } }),
-    prisma.withdrawal.aggregate({ where: { status: "PAID", paidAt: { lte: end } }, _sum: { payable: true } }),
-  ]);
-  const invested = investments.reduce((s, i) => s + i.amount, 0);
-  const returned = investments.filter((i) => i.status === "CLOSED" && i.closedAt && i.closedAt <= end).reduce((s, i) => s + (i.returnedAmount ?? 0), 0);
-  return (
-    (collected._sum.amount ?? 0) - (spent._sum.amount ?? 0) + (income._sum.amount ?? 0) - invested + returned - (payouts._sum.payable ?? 0)
-  );
+export async function cashAsOf(end: Date, db: Db = prisma): Promise<number> {
+  return cashAt(db, end);
 }
