@@ -77,14 +77,17 @@ async function main() {
     });
   }
 
+  // A real install's admin logs in by email, so their mobile number stays free for
+  // their own member account (same as admins added in Settings).
+  const adminLogin = demo ? adminPhone : adminEmail;
   const admin = await prisma.user.upsert({
-    where: { phone: adminPhone },
+    where: { phone: adminLogin },
     update: {},
     create: {
       name: process.env.SEED_ADMIN_NAME ?? (demo ? "[Admin name]" : "Admin"),
-      phone: adminPhone,
+      phone: adminLogin,
       email: adminEmail,
-      contactPhone: process.env.SEED_ADMIN_WHATSAPP || null,
+      contactPhone: process.env.SEED_ADMIN_WHATSAPP || (demo ? null : process.env.SEED_ADMIN_PHONE) || null,
       passwordHash: await hashPassword(adminPassword),
       role: "ADMIN",
       joinMonth: startMonth,
@@ -243,7 +246,7 @@ async function main() {
   }
 
   console.log("Seed complete.");
-  console.log(`Admin login: ${adminPhone} (or ${adminEmail}) / ${adminPassword}`);
+  console.log(demo ? `Admin login: ${adminPhone} (or ${adminEmail}) / ${adminPassword}` : `Admin login: ${adminEmail} / ${adminPassword}`);
   await prisma.$disconnect();
 }
 
