@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { InstallApp } from "@/components/InstallApp";
 import { prisma } from "@/lib/prisma";
 import { requireMember } from "@/lib/auth-guard";
 import { getSettings, money } from "@/lib/settings";
@@ -53,6 +54,8 @@ export default async function MemberHome() {
           </Link>
         </div>
       </div>
+
+      <InstallApp />
 
       {payout && (
         <Link href={`/member/payouts/${payout.id}`} className="rounded-2xl border-2 border-brand bg-white p-4 text-sm font-bold text-ink no-underline">

@@ -110,6 +110,15 @@ export async function eligibleMemberIds(db: Db, date: Date): Promise<string[]> {
   return members.filter((m) => isEligible(m, date)).map((m) => m.id);
 }
 
+/**
+ * Re-splits every cost and profit dated in or after `fromMonth` among the members
+ * eligible on its date. Used when a member is added with an earlier first month
+ * (or their first month changes), so they share what happened since then.
+ */
+export async function resplitFrom(db: Db, fromMonth: string) {
+  for (const s of await shareSources(db)) if (monthKey(s.date) >= fromMonth) await rebalance(db, s);
+}
+
 /** BR-10: equal shares in paisa, truncated; the remainder stays in the society fund. */
 export function splitPaisa(totalPaisa: number, count: number): number {
   if (count <= 0) return 0;

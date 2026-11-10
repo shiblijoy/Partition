@@ -13,7 +13,7 @@ import { PrismaClient, type AccountType } from "@prisma/client";
 import { encrypt, encryptPii } from "../src/lib/crypto";
 import { addMonths } from "../src/lib/months";
 import { newVerifyCode } from "../src/lib/receipts";
-import { isEligible, splitPaisa } from "../src/lib/books";
+import { isEligible, resplitFrom, splitPaisa } from "../src/lib/books";
 
 const prisma = new PrismaClient();
 
@@ -36,7 +36,15 @@ function guessType(name: string): AccountType {
 async function main() {
   const setting = await prisma.setting.findUnique({ where: { id: 1 } });
   if (!setting) return console.log("No settings yet: nothing to upgrade.");
-  if (setting.dataVersion >= 2) return console.log("Already upgraded.");
+  if (setting.dataVersion >= 2) {
+    // v3: members added with an earlier first month now share the costs and profits since then.
+    if (setting.dataVersion < 3) {
+      await resplitFrom(prisma, setting.startMonth);
+      await prisma.setting.update({ where: { id: 1 }, data: { dataVersion: 3 } });
+      return console.log("Costs and profits re-split among the members of each date.");
+    }
+    return console.log("Already upgraded.");
+  }
 
   const [oldSetting] = await legacy<{ cashAccounts: string | null }>(`SELECT cashAccounts FROM _Legacy_Setting`);
   const oldFdrs = await legacy<{ id: string; bank: string; amount: number; rate: number | null; openedOn: number; maturesOn: number; status: string; closedOn: number | null }>(`SELECT id, bank, CAST(amount AS REAL) AS amount, CAST(rate AS REAL) AS rate, CAST(openedOn AS INTEGER) AS openedOn, CAST(maturesOn AS INTEGER) AS maturesOn, status, CAST(closedOn AS INTEGER) AS closedOn FROM _Legacy_Fdr`);

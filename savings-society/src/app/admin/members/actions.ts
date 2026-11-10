@@ -17,6 +17,7 @@ import { sendTemplate } from "@/lib/messaging";
 import { queueNotification } from "@/lib/notify";
 import { membersWithLedgers } from "@/lib/society";
 import { rateFor } from "@/lib/rates";
+import { resplitFrom } from "@/lib/books";
 import { EDITABLE_FIELDS, FIELD_LABELS, parseChanges, validateField, type EditableField } from "@/lib/profile-fields";
 import { recordForMember } from "@/lib/services/payments";
 import { ServiceError } from "@/lib/errors";
@@ -91,6 +92,8 @@ export async function addMember(_prev: FormState, formData: FormData): Promise<F
         ...encryptPii(nominee),
       },
     });
+    // A member who starts from an earlier month shares the costs and profits since then.
+    if (user.joiningRule === "FRESH") await resplitFrom(prisma, user.joinMonth);
     await audit(admin.userId, "member.added", `${admin.name} added ${name} (${phone})${rule === "catchup" ? ", paying back all past months" : ""}`, { entity: `user:${user.id}`, after: { name, phone, joinMonth: user.joinMonth, joiningRule: user.joiningRule } });
     changed();
     return sendPassword(user, password, settings.societyName, true);
@@ -114,6 +117,7 @@ export async function updateMember(memberId: string, _prev: FormState, formData:
     }
     const before = pii(await prisma.user.findUniqueOrThrow({ where: { id: memberId } }));
     await prisma.user.update({ where: { id: memberId }, data: { name, phone, joinMonth, ...encryptPii(details) } });
+    if (before.joinMonth !== joinMonth && before.joiningRule === "FRESH") await resplitFrom(prisma, joinMonth < before.joinMonth ? joinMonth : before.joinMonth);
     const changedFields = [
       ...(before.name !== name ? ["name"] : []),
       ...(before.phone !== phone ? ["mobile"] : []),
