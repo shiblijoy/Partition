@@ -25,7 +25,7 @@ export default async function PrivacyPage() {
           <ul>
             <li><strong>Your account:</strong> name, mobile number (your login), member number, and a salted hash of your password (never the password itself).</li>
             <li><strong>Your profile:</strong> NID number, date of birth, address and your nominee&apos;s name, relation, mobile and NID — to identify you and to pay your nominee if something happens to you. These are encrypted in the database.</li>
-            <li><strong>Your money records:</strong> deposits, payment proofs (screenshots or photos), receipts, withdrawals, votes and your share of the society&apos;s costs and profits.</li>
+            <li><strong>Your money records:</strong> deposits, payment proofs (screenshots or photos), receipts, withdrawals, votes and your share of the society&apos;s costs and profits (the profit figures are shown to admins and the auditor only).</li>
             <li><strong>Security records:</strong> when you log in, from which device, and an audit log of changes the admins make.</li>
             <li><strong>Messages:</strong> WhatsApp/SMS messages sent to you (login codes, temporary passwords, reminders) are logged with their delivery status.</li>
           </ul>

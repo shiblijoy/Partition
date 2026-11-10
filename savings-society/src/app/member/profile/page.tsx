@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireMember } from "@/lib/auth-guard";
-import { getSettings, money } from "@/lib/settings";
-import { fundSummary, memberPosition } from "@/lib/society";
 import { monthLabel } from "@/lib/months";
 import { mask } from "@/lib/format";
 import { pii } from "@/lib/crypto";
@@ -19,10 +17,8 @@ import { cancelDetailsChange, proposeDetailsChange, requestAccountDeletion, requ
 export default async function ProfilePage() {
   const session = await requireMember();
   const t = tFor(session.language);
-  const [settings, rawMember, fund, deletion, lastEdit] = await Promise.all([
-    getSettings(),
+  const [rawMember, deletion, lastEdit] = await Promise.all([
     prisma.user.findUniqueOrThrow({ where: { id: session.userId } }),
-    fundSummary(),
     prisma.withdrawal.findFirst({ where: { memberId: session.userId, eraseData: true, status: { in: ["PENDING", "APPROVED"] } } }),
     prisma.memberRequest.findFirst({
       where: { memberId: session.userId, changes: { not: null } },
@@ -34,8 +30,6 @@ export default async function ProfilePage() {
   const pendingChanges = parseChanges(pendingEdit?.changes ?? null);
   // The form starts from what's waiting for approval, if anything, else the current details.
   const formValue = (f: (typeof EDITABLE_FIELDS)[number][0]) => (f in pendingChanges ? pendingChanges[f]?.to : member[f]) ?? "";
-  const position = await memberPosition(member.id, fund);
-  const $ = (n: number) => money(n, settings.currencySymbol);
   const initials = member.name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
 
   const links: Array<[string, string]> = [
@@ -168,7 +162,7 @@ export default async function ProfilePage() {
             <h2 className="text-base font-extrabold">{t("Delete your account?")}</h2>
             <p>{t("Deleting your account means leaving the society. It works like a full withdrawal:")}</p>
             <ul className="flex list-disc flex-col gap-1 pl-5">
-              <li>{t("You receive your settlement, estimated {amount}.", { amount: $(position.net) })}</li>
+              <li>{t("You receive your settlement, worked out by the admin.")}</li>
               <li>{t("Your login stops working after you confirm the payout.")}</li>
               <li>{t("Your NID, address and nominee details are erased.")}</li>
               <li>{t("Payment records and receipts are kept for 7 years, as the law and the society's accounts require.")} <Link href="/privacy">{t("Privacy policy")}</Link></li>

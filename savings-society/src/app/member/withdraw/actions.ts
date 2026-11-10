@@ -22,7 +22,7 @@ export async function requestWithdrawal(_prev: FormState, formData: FormData): P
     if (kind === "PARTIAL") {
       const position = await memberPosition(viewer.userId);
       if (!Number.isFinite(amount) || amount <= 0) return { error: "Enter how much you want to take out." };
-      if (amount > position.net) return { error: "That's more than your current net value." };
+      if (amount > position.net) return { error: "That's more than you can take out right now." };
     }
     const w = await prisma.withdrawal.create({ data: { memberId: viewer.userId, kind, payTo, reason, amount: kind === "PARTIAL" ? amount : null } });
     await queueForAll(prisma, await adminIds(), { kind: "withdrawal_request", title: "Withdrawal request", body: `${viewer.name} asked for a ${kind === "FULL" ? "full exit" : "partial withdrawal"}.`, url: `/admin/withdrawals/${w.id}` });

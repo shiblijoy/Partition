@@ -65,10 +65,11 @@ Everything from here runs on the server.
 
 ## 4. Prepare the server
 
-Update it, set the time zone, and turn on automatic security updates:
+Update it, install the basic tools, set the time zone, and turn on automatic security updates:
 
 ```bash
 apt update && apt upgrade -y
+apt install -y curl sudo cron ufw openssl gnupg nano ca-certificates   # missing on "minimal" images
 timedatectl set-timezone Asia/Dhaka
 apt install -y unattended-upgrades && dpkg-reconfigure -f noninteractive unattended-upgrades
 ```

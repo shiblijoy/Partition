@@ -29,7 +29,8 @@ export async function yearStatement(memberId: string, year: number) {
   };
 }
 
-export async function statementPdf(memberId: string, year: number): Promise<Uint8Array> {
+/** `showProfit`: admins and auditors see the profit share; a member's own copy leaves it out. */
+export async function statementPdf(memberId: string, year: number, showProfit = false): Promise<Uint8Array> {
   const s = await yearStatement(memberId, year);
   const settings = await getSettings();
   const tk = (n: number) => `Tk ${new Intl.NumberFormat("en-IN").format(Math.round(n))}`;
@@ -54,11 +55,12 @@ export async function statementPdf(memberId: string, year: number): Promise<Uint
   if (s.payments.length === 0) line("No approved deposits this year.");
   y -= 8;
   line(`Deposits in ${year}`, tk(s.deposits), true);
-  line(`Profit share in ${year}`, `+ ${tk(s.profitShare)}`);
+  if (showProfit) line(`Profit share in ${year}`, `+ ${tk(s.profitShare)}`);
   line(`Cost share in ${year}`, `- ${tk(s.costShare)}`);
   for (const w of s.payouts) line(`Paid out ${w.paidAt ? fmtDate(w.paidAt) : ""} (${w.receipt?.receiptNo ?? ""})`, `- ${tk(w.payable ?? 0)}`);
   y -= 8;
   line("All-time deposits", tk(s.position.deposits), true);
-  line("Net value today (deposits + profit share - cost share - withdrawals)", tk(s.position.net), true);
+  if (showProfit) line("Net value today (deposits + profit share - cost share - withdrawals)", tk(s.position.net), true);
+  else line("Deposits after costs (deposits - cost share - withdrawals)", tk(s.position.afterCosts), true);
   return pdf.save();
 }

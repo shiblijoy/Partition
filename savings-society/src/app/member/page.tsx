@@ -68,18 +68,14 @@ export default async function MemberHome() {
             {t("{paid} of {owed} months approved · since {month}", { paid: ledger.monthsPaid, owed: ledger.monthsOwed, month: monthName(ledger.firstMonth, lang) })}
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-2.5 border-t border-[#3E8370] pt-3.5">
-          <div className="flex flex-col gap-0.5">
-            <div className="text-xs text-brand-soft">{t("Profit share")}</div>
-            <div className="text-base font-bold">+&nbsp;{$(position.profitShare)}</div>
-          </div>
+        <div className="grid grid-cols-2 gap-2.5 border-t border-[#3E8370] pt-3.5">
           <div className="flex flex-col gap-0.5">
             <div className="text-xs text-brand-soft">{t("Cost share")}</div>
             <div className="text-base font-bold">−&nbsp;{$(position.costShare)}</div>
           </div>
           <div className="flex flex-col gap-0.5">
-            <div className="text-xs text-brand-soft">{t("Net value")}</div>
-            <div className="text-base font-bold">{$(position.net)}</div>
+            <div className="text-xs text-brand-soft">{t("After costs")}</div>
+            <div className="text-base font-bold">{$(position.afterCosts)}</div>
           </div>
         </div>
       </div>

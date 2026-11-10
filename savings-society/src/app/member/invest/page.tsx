@@ -2,23 +2,22 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireMember } from "@/lib/auth-guard";
 import { getSettings, money } from "@/lib/settings";
-import { fundSummary, memberPosition } from "@/lib/society";
+import { fundSummary } from "@/lib/society";
 import { tally } from "@/lib/votes";
 import { tFor, dateName } from "@/lib/i18n";
 import { INVESTMENT_KIND_LABELS, VOTE_RULE_LABELS } from "@/components/ui";
 import { castVote } from "./actions";
 
-/** FR-INV-09: every investment, its status and the member's own profit share; FR-INV-04 voting. */
+/** FR-INV-09: every investment and its status (profit is for admins and auditors only); FR-INV-04 voting. */
 export default async function InvestPage() {
   const viewer = await requireMember();
   const t = tFor(viewer.language);
   const lang = viewer.language;
-  const [settings, fund, position, proposals, investments] = await Promise.all([
+  const [settings, fund, proposals, investments] = await Promise.all([
     getSettings(),
     fundSummary(),
-    memberPosition(viewer.userId),
     prisma.investment.findMany({ where: { status: "PROPOSED" }, include: { votes: true, _count: { select: { documents: { where: { adminOnly: false, replacedById: null } } } } }, orderBy: { createdAt: "desc" } }),
-    prisma.investment.findMany({ where: { status: { in: ["PASSED", "ACTIVE", "CLOSED"] } }, include: { incomes: { where: { reversedAt: null }, select: { amount: true } } }, orderBy: [{ status: "asc" }, { startedAt: "desc" }] }),
+    prisma.investment.findMany({ where: { status: { in: ["PASSED", "ACTIVE", "CLOSED"] } }, orderBy: [{ status: "asc" }, { startedAt: "desc" }] }),
   ]);
   const $ = (n: number) => money(n, settings.currencySymbol);
 
@@ -28,9 +27,7 @@ export default async function InvestPage() {
 
       <div className="grid grid-cols-2 gap-3.5 rounded-[20px] bg-brand p-[18px] text-white">
         <div className="flex flex-col gap-0.5"><div className="text-xs text-brand-soft">{t("Society invested")}</div><div className="text-lg font-extrabold">{$(fund.invested)}</div></div>
-        <div className="flex flex-col gap-0.5"><div className="text-xs text-brand-soft">{t("Cash in account")}</div><div className="text-lg font-extrabold">{$(fund.cash)}</div></div>
-        <div className="flex flex-col gap-0.5 border-t border-[#3E8370] pt-3"><div className="text-xs text-brand-soft">{t("My profit share")}</div><div className="text-lg font-extrabold">+&nbsp;{$(position.profitShare)}</div></div>
-        <div className="flex flex-col gap-0.5 border-t border-[#3E8370] pt-3"><div className="text-xs text-brand-soft">{t("My share of assets")}</div><div className="text-lg font-extrabold">1 / {fund.activeMembers}</div></div>
+        <div className="flex flex-col gap-0.5"><div className="text-xs text-brand-soft">{t("My share of assets")}</div><div className="text-lg font-extrabold">1 / {fund.activeMembers}</div></div>
       </div>
 
       {proposals.map((p) => {
@@ -83,8 +80,6 @@ export default async function InvestPage() {
       </div>
       {investments.length === 0 && <p className="rounded-xl border border-line bg-white p-4 text-sm text-muted">{t("No investments yet.")}</p>}
       {investments.map((i) => {
-        const profit = i.incomes.reduce((s, x) => s + x.amount, 0);
-        const closedGain = i.status === "CLOSED" ? (i.returnedAmount ?? i.amount) - i.amount + profit : 0;
         return (
           <div key={i.id} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white px-3.5 py-3">
             <div className="flex min-w-0 flex-col gap-0.5">
@@ -92,10 +87,9 @@ export default async function InvestPage() {
               <div className="text-xs text-muted">
                 {t(INVESTMENT_KIND_LABELS[i.kind])} · {t(i.status === "CLOSED" ? "closed" : i.status === "PASSED" ? "approved, not yet invested" : "active")}
                 {i.startedAt && i.status === "ACTIVE" && ` · ${t("since {date}", { date: dateName(i.startedAt, lang, false) })}`}
-                {profit > 0 && i.status === "ACTIVE" && ` · ${t("{amount} profit so far", { amount: $(profit) })}`}
               </div>
             </div>
-            <div className="text-right text-[13px] font-bold">{i.status === "CLOSED" ? `${closedGain >= 0 ? "+" : ""} ${$(closedGain)}` : $(i.amount)}</div>
+            <div className="text-right text-[13px] font-bold">{$(i.amount)}</div>
           </div>
         );
       })}

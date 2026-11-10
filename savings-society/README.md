@@ -16,18 +16,18 @@ from the design, waiting for the society's real details.
 |---|---|
 | Login | Mobile number + password, show/hide, "keep me logged in". |
 | Set / change password | Forced at first login (temporary password from the admin). Changing it signs out every other phone. |
-| Home | Approved savings, cost share, net value, this month's status, recent approved payments, unread-notice dot. |
+| Home | Approved savings, cost share, savings after costs, this month's status, recent approved payments, unread-notice dot. |
 | Pay | Pick one or more months (amount worked out), method, transaction ID, proof photo/PDF, note. |
 | History | Deposited / pending / due, every submission with its status, rejection reasons, receipt links, payouts. |
 | Receipt | Official receipt: number, amount in words, months, method, approver, savings total, verification code. Download (print to PDF) and Share. |
-| Investments & voting | Society totals, your profit share, open proposals with live yes/no tally and the votes needed; vote or change your vote. |
-| Withdraw | Leave the society or take out part of your savings, with the estimated settlement; tracker and cancel until approved. |
-| Payout receipt | The settlement breakdown; confirm "I received ৳…" or report a problem. |
+| Investments & voting | Money invested, open proposals with live yes/no tally and the votes needed; vote or change your vote. |
+| Withdraw | Leave the society or take out part of your savings, with deposits after costs (the admin works out the final amount); tracker and cancel until approved. |
+| Payout receipt | The amount paid, deposits and cost share; confirm "I received ৳…" or report a problem. |
 | Profile & nominee | Masked NID and nominee. Members edit their own date of birth, address, NID and nominee; changes apply only after the admin approves them (name and mobile number are changed by the admin). Account deletion (= full withdrawal, personal data erased after payout). |
 | Notices | Meetings (add to calendar), votes, reminders and decisions; opening the page marks them read. |
-| Asset documents / Society books | Read-only deeds and agreements by asset (watermarked downloads); open books of income and costs, and your own cost and profit share. |
+| Asset documents / Society books | Read-only deeds and agreements by asset (watermarked downloads); open books of costs, and your own cost share. |
 | Notifications | Approvals, rejections, receipts, votes, withdrawals, notices; turn on push for this phone. |
-| Yearly statement | Deposits, shares and net value for a year, with a PDF. |
+| Yearly statement | Deposits, cost share and savings after costs for a year, with a PDF. |
 | Language | Bangla or English, on the login page or in My profile. |
 | Check a receipt | Enter a receipt's code to confirm the society issued it. |
 
@@ -73,7 +73,11 @@ entry naming the society account it moved through. Nothing is typed in as a tota
   payouts (+ opening balances). **Fund balance** = cash + money invested.
   Estimated land/share gains are shown separately and count only once sold.
 - **Settlement** = deposits (less earlier withdrawals) + profit share − cost
-  share (+ land share if paid now). It's frozen when approved. A land share left
+  share (+ land share if paid now). It's frozen when approved.
+- **Who sees profit:** only admins and the auditor. Members see their deposits,
+  their cost share and the costs list, never income, profit shares, gains or
+  the fund's cash balance; their payout receipt shows the amount paid without
+  the profit line. A land share left
   "on sale" stays listed as owed until the land is sold and it's paid.
 - **Corrections:** nothing is deleted. A mistaken approval, expense or income is
   reversed by an opposite entry with a reason (its receipt marked cancelled).

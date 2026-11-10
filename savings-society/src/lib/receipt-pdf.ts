@@ -17,7 +17,8 @@ const tk = (n: number) => `Tk ${new Intl.NumberFormat("en-IN").format(Math.round
  * §6.4: the receipt PDF is made on the server (A5, society name, verify code and
  * QR code), stored once, and the same file is returned on every download.
  */
-export async function receiptPdf(receiptId: string): Promise<Buffer> {
+/** `showProfit`: the profit and land-gain lines of a payout are for admins and auditors only. */
+export async function receiptPdf(receiptId: string, showProfit = false): Promise<Buffer> {
   const r = await prisma.receipt.findUniqueOrThrow({
     where: { id: receiptId },
     include: { member: true, payment: { include: { account: true } }, withdrawal: true },
@@ -68,8 +69,10 @@ export async function receiptPdf(receiptId: string): Promise<Buffer> {
   if (r.withdrawal) {
     const w = r.withdrawal;
     if (w.kind === "FULL" || w.kind === "NOMINEE") {
-      rows.push(["Deposits", tk(w.deposits ?? 0)], ["+ Profit share", tk(w.profitShare ?? 0)], ["- Cost share", tk(w.costShare ?? 0)]);
-      if (w.landTiming === "NOW") rows.push(["+ Land gain share", tk(w.landShare ?? 0)]);
+      rows.push(["Deposits", tk(w.deposits ?? 0)]);
+      if (showProfit) rows.push(["+ Profit share", tk(w.profitShare ?? 0)]);
+      rows.push(["- Cost share", tk(w.costShare ?? 0)]);
+      if (showProfit && w.landTiming === "NOW") rows.push(["+ Land gain share", tk(w.landShare ?? 0)]);
     }
     rows.push(
       ["Paid to", w.kind === "NOMINEE" ? `${member.nomineeName ?? "Nominee"} (nominee)` : member.name],
@@ -78,7 +81,7 @@ export async function receiptPdf(receiptId: string): Promise<Buffer> {
       ["Paid on", w.paidAt ? fmtDate(w.paidAt) : "—"],
       ["Paid by", w.paidBy ?? "Admin"]
     );
-    if (w.landTiming === "ON_SALE" && (w.landShare ?? 0) > 0) rows.push(["Still owed (land share)", `${tk(w.landShare ?? 0)} when the land is sold`]);
+    if (w.landTiming === "ON_SALE" && (w.landShare ?? 0) > 0) rows.push(["Still owed (land share)", showProfit ? `${tk(w.landShare ?? 0)} when the land is sold` : "Paid when the land is sold"]);
   }
   for (const [k, v] of rows) {
     page.drawText(k, { x: 28, y, size: 9, font, color: muted });

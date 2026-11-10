@@ -9,7 +9,7 @@ import type { Receipt, Withdrawal, User } from "@prisma/client";
 const KIND_LABEL = { FULL: "Withdrawal payout · full exit", PARTIAL: "Withdrawal payout · partial", NOMINEE: "Settlement to nominee", LAND_SHARE: "Land share payout" };
 
 /** FR-RCP-02: the receipt issued when a withdrawal or settlement is paid out. */
-export async function PayoutReceipt({ withdrawal, member, settings, lang = "en" }: { withdrawal: Withdrawal & { receipt: Receipt | null }; member: User; settings: Settings; lang?: string }) {
+export async function PayoutReceipt({ withdrawal, member, settings, lang = "en", showProfit = true }: { withdrawal: Withdrawal & { receipt: Receipt | null }; member: User; settings: Settings; lang?: string; showProfit?: boolean }) {
   const t = (k: string, v?: Record<string, string | number>) => translate(lang, k, v);
   const $ = (n: number) => money(n, settings.currencySymbol);
   const w = withdrawal;
@@ -37,13 +37,14 @@ export async function PayoutReceipt({ withdrawal, member, settings, lang = "en" 
         ) : (
           <>
             <Line label={t("Deposits")} value={$(w.deposits ?? 0)} />
-            <Line label={t("+ Profit share")} value={`+ ${$(w.profitShare ?? 0)}`} tone="good" />
-            <Line label={t("− Cost share")} value={`− ${$(w.costShare ?? 0)}`} tone="bad" />
-            {w.landTiming === "NOW" && <Line label={t("+ Land gain share")} value={`+ ${$(w.landShare ?? 0)}`} tone="good" />}
+            {showProfit && <Line label={t("+ Profit share")} value={`+ ${$(w.profitShare ?? 0)}`} tone="good" />}
+            <Line label={t("− Cost share")} value={`− ${$(w.costShare ?? 0)}`} tone="bad" />
+            {showProfit && w.landTiming === "NOW" && <Line label={t("+ Land gain share")} value={`+ ${$(w.landShare ?? 0)}`} tone="good" />}
           </>
         )}
         <Line label={t(w.kind === "NOMINEE" ? "Paid to nominee" : "Paid to member")} value={$(w.payable ?? 0)} total />
         <p className="pt-1 text-xs text-muted">{inWords(w.payable ?? 0, lang)}</p>
+        {!showProfit && (w.kind === "FULL" || w.kind === "NOMINEE") && <p className="pt-1 text-xs text-muted">{t("The final amount, including any profit share, was worked out by the admin.")}</p>}
       </div>
 
       <div className="grid grid-cols-2 gap-x-3.5 gap-y-3 px-[18px] py-3 text-[13px]">
@@ -55,7 +56,7 @@ export async function PayoutReceipt({ withdrawal, member, settings, lang = "en" 
 
       {w.landTiming === "ON_SALE" && (w.landShare ?? 0) > 0 && (
         <p className="mx-[18px] mb-3 rounded-lg bg-warn-bg px-3 py-2 text-xs leading-snug text-warn">
-          {t("Still owed later: land gain share (estimate {amount}), paid when the land is sold.", { amount: $(w.landShare ?? 0) })}
+          {showProfit ? t("Still owed later: land gain share (estimate {amount}), paid when the land is sold.", { amount: $(w.landShare ?? 0) }) : t("Still owed later: a land gain share, paid when the land is sold.")}
         </p>
       )}
 
