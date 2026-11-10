@@ -41,7 +41,7 @@ export default async function MemberDetailPage({ params }: PageProps<"/admin/mem
   const now = currentMonth();
   const year = now.slice(0, 4);
   const months = monthRange(`${year}-01`, `${year}-12`);
-  const recordable = (await openMonths(member.id, settings, 8)).map((key) => ({
+  const recordable = (await openMonths(member.id, settings)).map((key) => ({
     key,
     amount: rateFor(key, settings.rates),
     label: `${monthLabel(key)}${ledger.statusFor(key) === "due" ? " (due)" : key > now ? " (advance)" : ""}`,

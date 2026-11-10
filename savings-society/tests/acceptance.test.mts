@@ -63,6 +63,14 @@ after(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("the Pay form offers every unpaid month since joining and 12 months ahead", async () => {
+  const s = await getSettings();
+  const open = await pay.openMonths(members[9], s);
+  assert.equal(open[0], start);
+  assert.equal(open[open.length - 1], addMonths(now, 12));
+  assert.equal(open.length, 9 + 1 + 12); // 9 past months, this month, 12 ahead
+});
+
 test("a submitted payment is pending, changes no total, and appears in the queue", async () => {
   const s = await settings();
   const [p] = await pay.submitPayments(s, { memberId: members[0], months: [start], method: "BANK", reference: "TX1", paidOn: day(start, 3), proofPath: null, note: null });

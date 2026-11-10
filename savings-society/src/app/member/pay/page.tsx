@@ -20,8 +20,8 @@ export default async function PayPage() {
       </div>
     );
   }
-  const [ledger, open] = await Promise.all([ledgerFor(viewer.userId, settings), openMonths(viewer.userId, settings, 8)]);
-  // FR-PAY-01/07: the current month or advance months, never one already pending or approved.
+  const [ledger, open] = await Promise.all([ledgerFor(viewer.userId, settings), openMonths(viewer.userId, settings)]);
+  // FR-PAY-01/07: every unpaid month since joining plus up to 12 months ahead, never one already pending or approved.
   const months = open.map((key) => ({ key, label: monthName(key, viewer.language), due: ledger.statusFor(key) === "due", amount: rateFor(key, settings.rates) }));
 
   return (
