@@ -22,7 +22,7 @@ export function ChangePasswordForm({ temporary = false }: { temporary?: boolean 
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <div>
-        <label htmlFor="current" className={labelClass}>{temporary ? t("Temporary password (from WhatsApp)") : t("Current password")}</label>
+        <label htmlFor="current" className={labelClass}>{temporary ? t("Temporary password (from your admin)") : t("Current password")}</label>
         <input id="current" name="current" type="password" required autoComplete="current-password" className={inputClass} />
       </div>
       <div>

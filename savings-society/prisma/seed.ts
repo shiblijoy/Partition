@@ -62,7 +62,7 @@ async function main() {
       societyName: "Dreamhive",
       currencySymbol: "৳",
       startMonth,
-      ...(demo ? { paymentInfo: "Bank: [Bank], [Branch]\nA/C name: Dreamhive Savings Society\nA/C ending 4821" } : {}),
+      ...(demo ? { paymentInfo: "Write your member number in the transfer reference." } : {}),
     },
   });
   await prisma.monthlyRate.upsert({ where: { fromMonth: startMonth }, update: {}, create: { fromMonth: startMonth, amount: Number(process.env.SEED_MONTHLY_AMOUNT ?? 10000), createdBy: "setup" } });
@@ -70,7 +70,8 @@ async function main() {
     await prisma.account.createMany({
       data: demo
         ? [
-            { name: "[Bank] savings", type: "BANK", last4: "4821" },
+            { name: "[Bank] savings", type: "BANK", last4: "4821", memberDetails: "[Bank], [Branch] branch\nA/C name: Dreamhive Savings Society\nA/C no. [0000000004821]" },
+            { name: "[Second bank] current", type: "BANK", last4: "1190", memberDetails: "[Second bank], [Branch] branch\nA/C name: Dreamhive Savings Society\nA/C no. [0000000001190]" },
             { name: "Cash with treasurer", type: "CASH" },
           ]
         : [{ name: "Society bank account", type: "BANK" }],

@@ -16,7 +16,7 @@ export async function addAccount(_prev: FormState, formData: FormData): Promise<
     const admin = await requireAdmin();
     const type = String(formData.get("type") ?? "") as AccountType;
     if (!Object.values(AccountType).includes(type) || type === "FDR") return { error: "Choose the account type (FDRs are opened from Income & FDRs)." };
-    await add({ name: text(formData, "name") ?? "", type, last4: text(formData, "last4"), openingBalance: Math.round(Number(formData.get("openingBalance") || 0)), actor: actorOf(admin) });
+    await add({ name: text(formData, "name") ?? "", type, last4: text(formData, "last4"), openingBalance: Math.round(Number(formData.get("openingBalance") || 0)), memberDetails: text(formData, "memberDetails"), actor: actorOf(admin) });
     changed();
     return { ok: "Account added." };
   });
@@ -28,6 +28,20 @@ export async function moveMoney(_prev: FormState, formData: FormData): Promise<F
     await transfer({ fromId: text(formData, "fromId") ?? "", toId: text(formData, "toId") ?? "", amount: Number(formData.get("amount")), date: dateField(formData, "date"), note: text(formData, "note"), actor: actorOf(admin) });
     changed();
     return { ok: "Moved. Total cash is unchanged; only the two balances moved." };
+  });
+}
+
+/** The bank details members see on the Pay form for this account (bank, branch, account name and number). */
+export async function setMemberDetails(id: string, _prev: FormState, formData: FormData): Promise<FormState> {
+  return attempt(async () => {
+    const admin = await requireAdmin();
+    const account = await prisma.account.findUniqueOrThrow({ where: { id } });
+    if (account.type !== "BANK") return { error: "Only bank accounts take members' payments." };
+    const memberDetails = text(formData, "memberDetails");
+    await prisma.account.update({ where: { id }, data: { memberDetails } });
+    await audit(admin.userId, "account.details", `${admin.name} ${memberDetails ? "updated" : "removed"} the payment details members see for ${account.name}`, { entity: `account:${id}`, before: { memberDetails: account.memberDetails }, after: { memberDetails } });
+    changed();
+    return { ok: memberDetails ? "Saved. Members see these details on the Pay form." : "Removed. Members no longer see this account on the Pay form." };
   });
 }
 

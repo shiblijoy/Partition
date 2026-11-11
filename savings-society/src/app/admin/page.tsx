@@ -7,9 +7,8 @@ import { openAccounts } from "@/lib/books";
 import { owedLandShares } from "@/lib/services/withdrawals";
 import { whatsappConfigured } from "@/lib/messaging";
 import { currentMonth, monthLabel } from "@/lib/months";
-import { dateInput, fmtDay, whatsappLink } from "@/lib/format";
+import { dateInput, fmtDay } from "@/lib/format";
 import { rateFor } from "@/lib/rates";
-import { Icon } from "@/components/icons";
 import { Card, Notice, PageHeader, StatCard, METHOD_LABELS, secondaryButton, smallButton, smallSecondary } from "@/components/ui";
 import { quickApprove } from "./payments/actions";
 import { closeRequest } from "./members/actions";
@@ -42,8 +41,6 @@ export default async function AdminDashboard() {
   const owing = members.filter((m) => m.ledger.due > 0).sort((a, b) => b.ledger.due - a.ledger.due);
   const outstanding = owing.reduce((s, m) => s + m.ledger.due, 0);
   const noNominee = members.filter((m) => !m.hasNominee);
-  const reminder = (name: string, due: number) =>
-    `Assalamu alaikum ${name.split(" ")[0]}, a reminder from ${settings.societyName}: your deposit of ${$(due)} is due by the ${settings.reminderDay}th. Please pay and upload the proof in the app. Thank you!`;
   // One queue row per batch (months paid together).
   const batches = new Map<string, typeof queue>();
   for (const p of queue) batches.set(p.batchId ?? p.id, [...(batches.get(p.batchId ?? p.id) ?? []), p]);
@@ -59,9 +56,6 @@ export default async function AdminDashboard() {
 
       {canEdit && whatsappConfigured() && !me.contactPhone && (
         <Notice tone="warn">Add your WhatsApp number in <Link href="/admin/settings#me">Settings</Link> to turn on the 6-digit login code for your admin account.</Notice>
-      )}
-      {canEdit && !whatsappConfigured() && (
-        <Notice tone="neutral">WhatsApp isn&apos;t connected yet, so login codes, invites and reminders can&apos;t be sent automatically. The app gives you ready-to-send WhatsApp links instead. See DEPLOY.md → WhatsApp.</Notice>
       )}
 
       {(alerts.length > 0 || withdrawals.length > 0 || requests.length > 0 || problems.length > 0 || passed.length > 0 || owedOpen.length > 0 || noNominee.length > 0) && (
@@ -155,7 +149,7 @@ export default async function AdminDashboard() {
                               <Link href={`/admin/payments/${p.id}`} className="py-1 text-[13px] font-bold">View proof</Link>
                               {canEdit && <Link href={`/admin/payments/${p.id}#reject`} className="py-1 text-[13px] font-bold text-bad">Reject</Link>}
                             </div>
-                            {canEdit && <QuickApprove action={quickApprove.bind(null, p.id)} paidOn={dateInput(p.paidOn)} today={dateInput()} accounts={accounts} />}
+                            {canEdit && <QuickApprove action={quickApprove.bind(null, p.id)} paidOn={dateInput(p.paidOn)} today={dateInput()} accounts={accounts} paidToId={p.paidToId} />}
                           </div>
                         </td>
                       </tr>
@@ -178,18 +172,13 @@ export default async function AdminDashboard() {
                     <Link href={`/admin/members/${m.id}`} className="text-sm font-semibold text-ink">{m.name}</Link>
                     <div className="text-xs text-muted">{m.pendingCount > 0 ? "Proof waiting for approval" : m.ledger.behind ? `${m.ledger.monthsOwed - m.ledger.monthsPaid} month(s) behind` : "This month"}</div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-sm font-bold">{$(m.ledger.due)}</span>
-                    <a href={whatsappLink(m.phone, reminder(m.name, m.ledger.due))} target="_blank" rel="noopener noreferrer" aria-label={`Remind ${m.name} on WhatsApp`} className="flex h-11 w-11 items-center justify-center rounded-lg text-brand hover:bg-paper">
-                      <Icon name="whatsapp" />
-                    </a>
-                  </div>
+                  <span className="text-sm font-bold">{$(m.ledger.due)}</span>
                 </li>
               ))}
             </ul>
           )}
           <p className="mt-2 text-xs text-muted">
-            {settings.remindersOn ? `Automatic reminders go out on the ${settings.reminderDay}th${whatsappConfigured() ? " on WhatsApp and" : ""} in the app.` : "Automatic reminders are off (Settings)."} The WhatsApp button opens a ready-to-send reminder.
+            {settings.remindersOn ? `Automatic reminders go out on the ${settings.reminderDay}th${whatsappConfigured() ? " on WhatsApp and" : ""} in the app, with a push notification.` : "Automatic reminders are off (Settings)."}
           </p>
           {canEdit && owing.length > 0 && <Link href="/admin/report/remind" className="mt-2 inline-block text-[13px] font-bold">Remind everyone who owes →</Link>}
         </Card>

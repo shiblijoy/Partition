@@ -60,7 +60,7 @@ export function LoginForm({ initialLang }: { initialLang: string }) {
 
         <div className="mt-8 flex flex-col gap-3 text-center text-[13px] leading-relaxed text-muted">
           <p>
-            <span className="font-bold text-ink">{t("Forgot your password?")}</span> {t("Ask your admin to reset it. You'll get a temporary password on WhatsApp.")}
+            <span className="font-bold text-ink">{t("Forgot your password?")}</span> {t("Ask your admin to reset it. They'll give you a temporary password.")}
           </p>
           <p>{t("No account? Only the admin can add members.")}</p>
           <p className="flex justify-center gap-4"><Link href="/privacy">{t("Privacy policy")}</Link><Link href="/verify">{t("Check a receipt")}</Link></p>

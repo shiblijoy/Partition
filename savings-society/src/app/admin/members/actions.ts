@@ -8,7 +8,6 @@ import { hashPassword, temporaryPassword } from "@/lib/password";
 import { normalizePhone } from "@/lib/phone";
 import { getSettings, money } from "@/lib/settings";
 import { isMonthKey, currentMonth, monthLabel } from "@/lib/months";
-import { whatsappLink } from "@/lib/format";
 import { audit } from "@/lib/audit";
 import { attempt, changed, dateField, text } from "@/lib/actions";
 import { encryptPii, pii } from "@/lib/crypto";
@@ -16,7 +15,6 @@ import { revokeSessions } from "@/lib/session";
 import { sendTemplate } from "@/lib/messaging";
 import { queueNotification } from "@/lib/notify";
 import { membersWithLedgers } from "@/lib/society";
-import { rateFor } from "@/lib/rates";
 import { resplitFrom } from "@/lib/books";
 import { EDITABLE_FIELDS, FIELD_LABELS, parseChanges, validateField, type EditableField } from "@/lib/profile-fields";
 import { recordForMember } from "@/lib/services/payments";
@@ -30,20 +28,11 @@ async function duplicatePhone(phone: string, exceptId?: string): Promise<boolean
   return !!(await prisma.user.findFirst({ where: { phone, ...(exceptId ? { NOT: { id: exceptId } } : {}) } }));
 }
 
-function inviteMessage(name: string, phone: string, password: string, society: string, first: boolean): string {
-  return first
-    ? `Assalamu alaikum ${name.split(" ")[0]}, you've been added to ${society}. Log in to the app with your mobile number ${phone} and temporary password ${password}. You'll be asked to set your own password.`
-    : `Your ${society} password has been reset. Log in with ${phone} and temporary password ${password}, then set your own password.`;
-}
-
-/** UC-01 alternates: WhatsApp, else SMS; if both fail the admin sees the password once to give in person. */
-async function sendPassword(user: { id: string; name: string; phone: string }, password: string, society: string, first: boolean): Promise<FormState> {
+/** UC-01: sent by WhatsApp or SMS when one is set up; otherwise the admin sees the password once to give in person. */
+async function sendPassword(user: { id: string; name: string; phone: string }, password: string, first: boolean): Promise<FormState> {
   const channel = await sendTemplate(user.phone, "temp_password", [user.name.split(" ")[0], password], user.id);
   if (channel) return { ok: `${first ? `${user.name} added. ` : ""}The temporary password was sent by ${channel === "WHATSAPP" ? "WhatsApp" : "SMS"}.` };
-  return {
-    ok: `${first ? `${user.name} added. ` : ""}It couldn't be sent automatically. Temporary password (shown once): ${password}`,
-    link: { href: whatsappLink(user.phone, inviteMessage(user.name, user.phone, password, society, first)), label: "Send it on WhatsApp yourself" },
-  };
+  return { ok: `${first ? `${user.name} added. ` : ""}Temporary password (shown once, give it to ${user.name.split(" ")[0]}): ${password} · They log in with ${user.phone}.` };
 }
 
 const nomineeFields = (formData: FormData) => ({
@@ -96,7 +85,7 @@ export async function addMember(_prev: FormState, formData: FormData): Promise<F
     if (user.joiningRule === "FRESH") await resplitFrom(prisma, user.joinMonth);
     await audit(admin.userId, "member.added", `${admin.name} added ${name} (${phone})${rule === "catchup" ? ", paying back all past months" : ""}`, { entity: `user:${user.id}`, after: { name, phone, joinMonth: user.joinMonth, joiningRule: user.joiningRule } });
     changed();
-    return sendPassword(user, password, settings.societyName, true);
+    return sendPassword(user, password, true);
   });
 }
 
@@ -139,7 +128,6 @@ export async function updateMember(memberId: string, _prev: FormState, formData:
 export async function resetPassword(memberId: string): Promise<FormState> {
   return attempt(async () => {
     const admin = await requireAdmin();
-    const settings = await getSettings();
     const password = temporaryPassword();
     const member = await prisma.user.update({
       where: { id: memberId },
@@ -147,7 +135,7 @@ export async function resetPassword(memberId: string): Promise<FormState> {
     });
     await revokeSessions(member.id);
     await audit(admin.userId, "member.password_reset", `${admin.name} reset ${member.name}'s password; all their sessions were ended`, { entity: `user:${memberId}` });
-    return sendPassword(member, password, settings.societyName, false);
+    return sendPassword(member, password, false);
   });
 }
 
@@ -188,11 +176,8 @@ export async function recordPayment(memberId: string, _prev: FormState, formData
       actor: actorOf(admin),
     });
     changed();
-    const member = await prisma.user.findUniqueOrThrow({ where: { id: memberId } });
-    const total = r.months.reduce((s, m) => s + rateFor(m, settings.rates), 0);
     return {
       ok: `Recorded and approved. ${r.months.length} receipt${r.months.length > 1 ? "s" : ""} issued.${r.skipped.length ? ` Skipped ${r.skipped.map((m) => monthLabel(m)).join(", ")}: already paid or waiting for approval.` : ""}`,
-      link: { href: whatsappLink(member.phone, `${settings.societyName}: we received ${money(total, settings.currencySymbol)} from you for ${r.months.map((m) => monthLabel(m)).join(", ")}. Your receipts are in the app. Thank you!`), label: `Tell ${member.name.split(" ")[0]} on WhatsApp` },
     };
   });
 }

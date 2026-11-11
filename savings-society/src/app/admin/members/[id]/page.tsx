@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Avatar } from "@/components/Avatar";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/auth-guard";
@@ -56,6 +57,7 @@ export default async function MemberDetailPage({ params }: PageProps<"/admin/mem
         <div className="flex flex-col gap-1">
           <Link href="/admin/members" className="text-[13px] font-bold">← Members</Link>
           <div className="flex flex-wrap items-center gap-3">
+            <Avatar name={member.name} path={member.avatarPath} size={48} />
             <h1 className="text-[28px] font-extrabold">{member.name}</h1>
             <Pill tone={status === "ACTIVE" ? "good" : status === "EXITING" ? "warn" : "neutral"}>{status.charAt(0) + status.slice(1).toLowerCase()}</Pill>
           </div>

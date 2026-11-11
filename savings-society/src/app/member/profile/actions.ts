@@ -9,6 +9,7 @@ import { audit } from "@/lib/audit";
 import { adminIds, queueForAll } from "@/lib/notify";
 import { EDITABLE_FIELDS, FIELD_LABELS, serializeChanges, validateField, type DetailChanges } from "@/lib/profile-fields";
 import type { FormState } from "@/components/ActionForm";
+import { deleteStoredFile, saveFile, UploadError } from "@/lib/uploads";
 
 /**
  * FR-MEM-08: the member edits their own details. Nothing changes yet: the edits
@@ -72,4 +73,33 @@ export async function setLanguage(lang: "en" | "bn"): Promise<void> {
   await prisma.user.update({ where: { id: viewer.userId }, data: { language: lang } });
   (await cookies()).set("lang", lang, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
   changed();
+}
+
+/** The signed-in user's profile picture (JPEG, PNG or WebP, up to 2MB; the phone shrinks it first). */
+export async function uploadAvatar(formData: FormData): Promise<FormState> {
+  const viewer = await requireSession();
+  const photo = formData.get("photo");
+  if (!(photo instanceof File) || photo.size === 0) return { error: "Choose a photo." };
+  if (!photo.type.startsWith("image/")) return { error: "Choose a photo (JPEG, PNG or WebP)." };
+  let path: string;
+  try {
+    path = await saveFile(`avatars/${viewer.userId}`, photo, 2 * 1024 * 1024);
+  } catch (err) {
+    if (err instanceof UploadError) return { error: err.message };
+    throw err;
+  }
+  const before = await prisma.user.findUniqueOrThrow({ where: { id: viewer.userId }, select: { avatarPath: true } });
+  await prisma.user.update({ where: { id: viewer.userId }, data: { avatarPath: path } });
+  await deleteStoredFile(before.avatarPath);
+  changed();
+  return { ok: "Photo saved." };
+}
+
+export async function removeAvatar(): Promise<FormState> {
+  const viewer = await requireSession();
+  const before = await prisma.user.findUniqueOrThrow({ where: { id: viewer.userId }, select: { avatarPath: true } });
+  await prisma.user.update({ where: { id: viewer.userId }, data: { avatarPath: null } });
+  await deleteStoredFile(before.avatarPath);
+  changed();
+  return { ok: "Photo removed." };
 }

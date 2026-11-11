@@ -63,7 +63,7 @@ export function AddMemberForm({ thisMonth, catchUpLabel, startLabel }: { thisMon
         </div>
       </fieldset>
       <p className="text-xs leading-relaxed text-muted">
-        A temporary password is sent on WhatsApp (SMS if the number has no WhatsApp). If neither can be sent, it&apos;s shown here once to give in person. The member must set their own password at first login.
+        A temporary password is shown here once after saving: give it to the member in person. The member must set their own password at first login.
       </p>
     </ActionForm>
   );

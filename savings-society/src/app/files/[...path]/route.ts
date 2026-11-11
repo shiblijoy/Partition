@@ -5,7 +5,7 @@ import { readStoredFile } from "@/lib/uploads";
 
 /**
  * Serves uploaded files after a session check (§6.4: proofs and documents are private).
- * - proofs/<memberId>/…: the admin/auditor, or the member who uploaded it.
+ * - proofs/<memberId>/… and avatars/<userId>/…: the admin/auditor, or the member it belongs to.
  * - receipts/… (expense receipts) and notices/…: any signed-in user (open books, notice attachments).
  * - documents/…: staff only here; members open documents through /docs/<id> (seen-by and watermark).
  * - anything else (statements, certificates, receipt PDFs): staff only.
@@ -19,7 +19,8 @@ export async function GET(_req: Request, ctx: RouteContext<"/files/[...path]">) 
 
   const [folder, owner] = path;
   const staff = user.role === "ADMIN" || user.role === "AUDITOR";
-  const allowed = staff || (folder === "proofs" && owner === session.userId) || folder === "receipts" || folder === "notices";
+  const own = (folder === "proofs" || folder === "avatars") && owner === session.userId;
+  const allowed = staff || own || folder === "receipts" || folder === "notices";
   if (!allowed) return new Response("Forbidden", { status: 403 });
 
   const file = await readStoredFile(path.join("/"));

@@ -94,10 +94,6 @@ export default async function AdminDocumentsPage({ searchParams }: PageProps<"/a
               <input type="checkbox" name="notify" defaultChecked className="h-5 w-5 accent-brand" />
               Notify members in the app
             </label>
-            <label className="flex min-h-11 items-center gap-3 text-sm font-semibold">
-              <input type="checkbox" name="whatsapp" className="h-5 w-5 accent-brand" />
-              Also share on WhatsApp
-            </label>
           </ActionForm>
         </Card>}
 

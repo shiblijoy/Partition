@@ -68,6 +68,7 @@ type SubmitInput = {
   proofPath: string | null;
   note: string | null;
   recordedBy?: string | null;
+  paidToId?: string | null; // the society bank account the member says they paid into
 };
 
 /**
@@ -78,6 +79,7 @@ type SubmitInput = {
  */
 async function createBatch(db: Db, settings: Settings, input: SubmitInput) {
   if (input.method !== "BANK") throw new ServiceError("Only bank payments are accepted.");
+  if (input.paidToId && !(await db.account.findFirst({ where: { id: input.paidToId, active: true, type: "BANK" } }))) throw new ServiceError("Choose one of the society's bank accounts.");
   const months = [...new Set(input.months)].filter(isMonthKey).sort();
   if (months.length === 0) throw new ServiceError("Pick the month (or months) you're paying for.");
   const member = await db.user.findUniqueOrThrow({ where: { id: input.memberId } });
@@ -98,6 +100,7 @@ async function createBatch(db: Db, settings: Settings, input: SubmitInput) {
         reference: input.reference,
         paidOn: input.paidOn,
         proofPath: input.proofPath,
+        paidToId: input.paidToId ?? null,
         note: input.note,
         recordedBy: input.recordedBy ?? null,
       },

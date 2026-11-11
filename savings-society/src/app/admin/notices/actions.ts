@@ -3,10 +3,8 @@
 import { NoticeKind } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
-import { getSettings } from "@/lib/settings";
 import { audit } from "@/lib/audit";
 import { attempt, changed, text } from "@/lib/actions";
-import { fmtDateTime } from "@/lib/format";
 import { queueForAll } from "@/lib/notify";
 import { CURRENT_MEMBER } from "@/lib/society";
 import { saveFile, UploadError } from "@/lib/uploads";
@@ -16,7 +14,6 @@ import type { FormState } from "@/components/ActionForm";
 export async function postNotice(_prev: FormState, formData: FormData): Promise<FormState> {
   return attempt(async () => {
     const admin = await requireAdmin();
-    const settings = await getSettings();
     const kind = String(formData.get("kind") ?? "") as NoticeKind;
     const title = text(formData, "title") ?? "";
     const body = text(formData, "body") ?? "";
@@ -42,11 +39,7 @@ export async function postNotice(_prev: FormState, formData: FormData): Promise<
     await queueForAll(prisma, members, { kind: "notice", title: kind === "MEETING" ? "Meeting notice" : "New notice", body: title, url: "/member/notices" });
     await audit(admin.userId, "notice.posted", `${admin.name} posted “${title}”`, { entity: `notice:${notice.id}` });
     changed();
-    const share = [`*${settings.societyName}: ${title}*`, eventAt ? `${fmtDateTime(eventAt)}${place ? `, ${place}` : ""}` : "", body, "Details in the app."].filter(Boolean).join("\n");
-    return {
-      ok: "Posted. Every member is notified in the app.",
-      ...(formData.get("whatsapp") === "on" ? { link: { href: `https://wa.me/?text=${encodeURIComponent(share)}`, label: "Share on WhatsApp (pick the society group)" } } : {}),
-    };
+    return { ok: "Posted. Every member gets a notification in the app, with sound on their phone." };
   });
 }
 
