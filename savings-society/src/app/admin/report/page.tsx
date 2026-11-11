@@ -8,12 +8,13 @@ import type { MonthStatus } from "@/lib/ledger";
 import { Card, Empty, Line, MonthLegend, PageHeader, Pill, StatCard, inputClass, secondaryButton, CATEGORY_LABELS, INCOME_LABELS } from "@/components/ui";
 import { PrintButton } from "@/components/PrintButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { buildReport, memberStatement, monthReport, periodReport } from "./data";
+import { buildReport, memberStatement, monthReport, periodReport, totalReport } from "./data";
 import { shareReport } from "./actions";
 
 const TYPES = [
   ["month", "Monthly report", "Cash, deposits, expenses, income"],
   ["year", "Annual summary", "For the AGM and members"],
+  ["total", "Total summary", "Everything since the start"],
   ["member", "Member statement", "One member's account"],
   ["audit", "Audit log", "Who did what, and when"],
   ["grid", "Deposits grid", "Every member, every month"],
@@ -67,6 +68,7 @@ export default async function ReportPage({ searchParams }: PageProps<"/admin/rep
         <div className="flex min-w-0 flex-[4_1_600px] flex-col gap-4">
           {type === "month" && <MonthlyReport month={isMonthKey(String(sp.month ?? "")) ? String(sp.month) : lastMonth} options={monthOptions} $={$} />}
           {type === "year" && <AnnualReport year={years.includes(String(sp.year)) ? String(sp.year) : now.slice(0, 4)} years={years} $={$} />}
+          {type === "total" && <TotalReport $={$} />}
           {type === "member" && <MemberReport memberId={String(sp.member ?? members[0]?.id ?? "")} members={members} $={$} />}
           {type === "audit" && <AuditReport month={isMonthKey(String(sp.month ?? "")) ? String(sp.month) : now} options={monthOptions} />}
           {type === "grid" && <GridReport $={$} />}
@@ -183,6 +185,82 @@ async function AnnualReport({ year, years, $ }: { year: string; years: string[];
         csv={`/admin/report/csv?type=year&year=${year}`}
         share={{ title, body: `Deposits ${$(r.deposits)}, income ${$(r.incomeTotal)}, expenses ${$(r.expenseTotal)}, invested ${$(r.invested)}. Cash ${$(r.closing)}.` }}
       />
+    </>
+  );
+}
+
+async function TotalReport({ $ }: { $: Money }) {
+  const r = await totalReport();
+  const a = r.all;
+  const title = `Total summary · since ${monthLabel(r.settings.startMonth, "long")}`;
+  return (
+    <>
+      <Card>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[22px] font-extrabold">{title}</h2>
+            <p className="text-[13px] text-muted">
+              {r.monthsSoFar} months · {r.closedMonths} closed · {r.members} current members{r.left ? ` · ${r.left} left` : ""} · as of today
+            </p>
+          </div>
+          <Pill tone={r.closedMonths >= r.monthsSoFar - 1 ? "good" : "warn"}>{r.closedMonths >= r.monthsSoFar - 1 ? "Up to date" : "Some months open"}</Pill>
+        </div>
+        <div className="my-4 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
+          <StatCard label="Fund today" value={$(r.fund.balance)} tone="brand" />
+          <StatCard label="Cash in accounts" value={$(r.fund.cash)} />
+          <StatCard label="Invested now" value={$(r.fund.invested)} />
+          <StatCard label="Total deposits" value={$(a.deposits)} />
+        </div>
+        <Line label="Opening balances (when the app started)" value={$(a.opening)} />
+        <Line label="+ Deposits approved" value={$(a.deposits)} />
+        <Line label="+ Income and investment profit" value={$(a.incomeTotal)} />
+        <Line label="+ Investments returned" value={$(a.returned)} />
+        <Line label="− Expenses" value={`−\u00a0${$(a.expenseTotal)}`} />
+        <Line label="− Invested" value={`−\u00a0${$(a.invested)}`} />
+        <Line label="− Paid to members who left" value={`−\u00a0${$(a.payoutTotal)}`} />
+        <Line label="Cash today" value={$(a.closing)} total />
+        <Line label="+ Money invested now" value={$(r.fund.invested)} />
+        <Line label="Fund today" value={$(r.fund.balance)} total />
+        {r.fund.unrealisedGain !== 0 && <p className="mt-2 text-[13px] text-muted">Estimated land/share gain not yet sold: {$(r.fund.unrealisedGain)} (not counted until sold).</p>}
+      </Card>
+
+      <Card title="Year by year">
+        <div className="-mx-4 overflow-x-auto sm:mx-0">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead>
+              <tr className="border-b border-line text-left text-xs font-bold text-muted">
+                <th className="px-4 py-2.5 sm:px-2">Year</th>
+                <th className="px-2 py-2.5 text-right">Deposits</th>
+                <th className="px-2 py-2.5 text-right">Income</th>
+                <th className="px-2 py-2.5 text-right">Expenses</th>
+                <th className="px-2 py-2.5 text-right">Invested</th>
+                <th className="px-2 py-2.5 text-right">Cash at year end</th>
+              </tr>
+            </thead>
+            <tbody>
+              {r.byYear.map((y) => (
+                <tr key={y.year} className="border-b border-[#EFEDE6]">
+                  <td className="px-4 py-2.5 font-bold sm:px-2"><Link href={`/admin/report?type=year&year=${y.year}`}>{y.year}</Link></td>
+                  <td className="px-2 py-2.5 text-right">{$(y.deposits)}</td>
+                  <td className="px-2 py-2.5 text-right">{$(y.incomeTotal)}</td>
+                  <td className="px-2 py-2.5 text-right">{$(y.expenseTotal)}</td>
+                  <td className="px-2 py-2.5 text-right">{$(y.invested)}</td>
+                  <td className="px-2 py-2.5 text-right font-bold">{$(y.closing)}</td>
+                </tr>
+              ))}
+              <tr className="font-extrabold">
+                <td className="px-4 py-2.5 sm:px-2">All years</td>
+                <td className="px-2 py-2.5 text-right">{$(a.deposits)}</td>
+                <td className="px-2 py-2.5 text-right">{$(a.incomeTotal)}</td>
+                <td className="px-2 py-2.5 text-right">{$(a.expenseTotal)}</td>
+                <td className="px-2 py-2.5 text-right">{$(a.invested)}</td>
+                <td className="px-2 py-2.5 text-right">{$(a.closing)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      <Actions csv="/admin/report/csv?type=total" />
     </>
   );
 }

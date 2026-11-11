@@ -153,28 +153,28 @@ enum ReceiptKind {
 }
 
 model User {
-  id                 String       @id @default(cuid())
-  memberNo           Int?         @unique
+  id                 String      @id @default(cuid())
+  memberNo           Int?        @unique
   name               String
-  phone              String       @unique // the login for members
-  email              String?      @unique // the login for admins and auditors
+  phone              String      @unique // the login for members
+  email              String?     @unique // the login for admins and auditors
   contactPhone       String? // admins: WhatsApp number that receives the login code
   passwordHash       String
-  mustChangePassword Boolean      @default(false)
+  mustChangePassword Boolean     @default(false)
   passwordChangedAt  DateTime? // sessions issued before this are signed out
-  failedLogins       Int          @default(0)
+  failedLogins       Int         @default(0)
   lockedUntil        DateTime? // 5 wrong passwords lock the account for 15 minutes
-  role               Role         @default(MEMBER)
+  role               Role        @default(MEMBER)
   joinMonth          String // "YYYY-MM": first month this member owes a deposit for
-  joiningRule        JoiningRule  @default(FRESH)
+  joiningRule        JoiningRule @default(FRESH)
   caughtUpAt         DateTime? // pay-back members: when every back month was approved
-  active             Boolean      @default(true)
+  active             Boolean     @default(true)
   exit               MemberExit?
   exitedAt           DateTime?
   deceasedOn         DateTime?
-  language           String       @default("en") // "en" or "bn"
+  language           String      @default("en") // "en" or "bn"
   avatarPath         String? // profile picture, relative path under /storage
-  createdAt          DateTime     @default(now())
+  createdAt          DateTime    @default(now())
 
   // Profile (personal data, encrypted at rest; erased when a member leaves and asks for deletion)
   nid             String?
@@ -194,6 +194,7 @@ model User {
   documentViews     DocumentView[]
   requests          MemberRequest[]
   auditEntries      AuditLog[]
+  pollVotes         PollVote[]
   sessions          Session[]
   loginCodes        LoginCode[]
   notifications     Notification[]
@@ -325,11 +326,11 @@ model Account {
 
 // The money ledger: every taka that moves is a row here, so every balance is a sum.
 model LedgerEntry {
-  id            String      @id @default(cuid())
+  id            String       @id @default(cuid())
   date          DateTime
   type          EntryType
   amount        Int // whole taka: + into the account, − out of it
-  account       Account     @relation(fields: [accountId], references: [id])
+  account       Account      @relation(fields: [accountId], references: [id])
   accountId     String
   memberId      String?
   sourceType    String // payment | expense | income | investment | withdrawal | transfer | reconciliation
@@ -340,7 +341,7 @@ model LedgerEntry {
   reversesId    String?      @unique
   reversedBy    LedgerEntry? @relation("Reversal")
   createdBy     String? // admin name
-  createdAt     DateTime    @default(now())
+  createdAt     DateTime     @default(now())
 
   @@index([date])
   @@index([sourceType, sourceId])
@@ -477,7 +478,7 @@ model Withdrawal {
   problemNote       String?
   adminNote         String?
   parentId          String? // LAND_SHARE: the settlement that left this share owed
-  createdAt         DateTime         @default(now())
+  createdAt         DateTime  @default(now())
 
   receipt Receipt?
 
@@ -677,4 +678,54 @@ model Setting {
   dualApprovalLimit Int? // payouts and investments above this need a second admin
   lastExportAt      DateTime?
   dataVersion       Int       @default(2)
+}
+
+// General polls (separate from investment votes). The admin sets the question, the
+// choices, when voting opens and closes, and who votes: all members or the admins.
+// Members see the result (the winning choice); only staff see the counts.
+enum PollAudience {
+  MEMBERS
+  ADMINS
+}
+
+model Poll {
+  id               String       @id @default(cuid())
+  question         String
+  details          String?
+  audience         PollAudience @default(MEMBERS)
+  opensAt          DateTime
+  closesAt         DateTime
+  cancelledAt      DateTime?
+  createdById      String
+  createdAt        DateTime     @default(now())
+  openNotifiedAt   DateTime? // voters were told it's open
+  resultNotifiedAt DateTime? // voters were told the result
+
+  options PollOption[]
+  votes   PollVote[]
+
+  @@index([closesAt])
+}
+
+model PollOption {
+  id       String     @id @default(cuid())
+  poll     Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  pollId   String
+  label    String
+  position Int
+  votes    PollVote[]
+}
+
+model PollVote {
+  id        String     @id @default(cuid())
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  pollId    String
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  optionId  String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([pollId, userId]) // one vote per person; it can be changed while the poll is open
 }

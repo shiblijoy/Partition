@@ -18,7 +18,7 @@ export async function deliver(limit = 200): Promise<number> {
     try {
       // Notices show their title; reminders say what's due without the amount; the rest stay generic.
       const body =
-        n.kind === "notice" ? n.body : n.kind === "reminder" ? `Hi ${first}, your monthly deposit is due. Tap to pay and upload the proof.` : `Hi ${first}, open Dreamhive for the details.`;
+        n.kind === "notice" || n.kind === "poll" ? n.body : n.kind === "reminder" ? `Hi ${first}, your monthly deposit is due. Tap to pay and upload the proof.` : `Hi ${first}, open Dreamhive for the details.`;
       await pushToUser(n.userId, { title: n.title, body, url: n.url, kind: n.kind });
       if (n.whatsapp) {
         const { template, params } = JSON.parse(n.whatsapp) as { template: Template; params: string[] };

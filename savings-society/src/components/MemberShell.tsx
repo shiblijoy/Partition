@@ -11,6 +11,7 @@ const TABS: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/member", label: "Home", icon: "home" },
   { href: "/member/pay", label: "Pay", icon: "upload" },
   { href: "/member/history", label: "History", icon: "list" },
+  { href: "/member/vote", label: "Vote", icon: "vote" },
   { href: "/member/invest", label: "Invest", icon: "chart" },
 ];
 
@@ -49,7 +50,7 @@ export function MemberShell({ children, readOnly }: { children: React.ReactNode;
         {children}
       </main>
       <nav className="no-print fixed inset-x-0 bottom-0 z-10 border-t border-line bg-white pb-[env(safe-area-inset-bottom)]">
-        <div className="mx-auto grid max-w-lg grid-cols-4 px-2 pb-3 pt-2">
+        <div className="mx-auto grid max-w-lg grid-cols-5 px-1 pb-3 pt-2">
           {TABS.map((tab) => {
             const active = isActive(tab.href);
             return (

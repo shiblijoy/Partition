@@ -26,6 +26,13 @@ const PATHS = {
       <path d="M15 7h4v4" />
     </>
   ),
+  vote: (
+    <>
+      <path d="M4 13h16v7H4z" />
+      <path d="M8 13V5h8v8" />
+      <path d="M10 9l1.5 1.5L14 7.5" />
+    </>
+  ),
   bell: (
     <>
       <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
