@@ -22,7 +22,7 @@ export function vapidPublicKey(): string | null {
 }
 
 /** Sends to every phone the user subscribed. Gone subscriptions are removed. Returns how many got it. */
-export async function pushToUser(userId: string, payload: { title: string; body: string; url?: string | null }): Promise<number> {
+export async function pushToUser(userId: string, payload: { title: string; body: string; url?: string | null; kind?: string }): Promise<number> {
   if (!pushConfigured()) return 0;
   const subs = await prisma.pushSubscription.findMany({ where: { userId } });
   let sent = 0;

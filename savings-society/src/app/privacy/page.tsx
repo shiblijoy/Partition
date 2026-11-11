@@ -27,16 +27,17 @@ export default async function PrivacyPage() {
             <li><strong>Your profile:</strong> NID number, date of birth, address and your nominee&apos;s name, relation, mobile and NID — to identify you and to pay your nominee if something happens to you. These are encrypted in the database.</li>
             <li><strong>Your money records:</strong> deposits, payment proofs (screenshots or photos), receipts, withdrawals, votes and your share of the society&apos;s costs and profits (the profit figures are shown to admins and the auditor only).</li>
             <li><strong>Security records:</strong> when you log in, from which device, and an audit log of changes the admins make.</li>
-            <li><strong>Messages:</strong> WhatsApp/SMS messages sent to you (login codes, temporary passwords, reminders) are logged with their delivery status.</li>
+            <li><strong>Profile photo:</strong> if you add one, it&apos;s seen by you and the admins only.</li>
+            <li><strong>Notifications:</strong> notifications sent to you (notices, reminders, approvals) are logged with their delivery status.</li>
           </ul>
         </section>
         <section>
           <h2>Who can see it</h2>
-          <p>You can see your own records. The society&apos;s admins can see every member&apos;s records to run the society; an auditor appointed by the society can read them but not change them. Other members never see your payments, proofs, balance or personal details. Everyone can see the society&apos;s overall books (totals, expenses and income) and vote counts, but not who voted which way.</p>
+          <p>You can see your own records. The society&apos;s admins can see every member&apos;s records to run the society; an auditor appointed by the society can read them but not change them. Other members never see your payments, proofs, balance or personal details. Every member can see the society&apos;s deposits, costs and investments, and vote counts, but not who voted which way.</p>
         </section>
         <section>
           <h2>Who we share it with</h2>
-          <p>We don&apos;t sell or share your data. To send messages we use Meta&apos;s WhatsApp Business Platform (and an SMS provider as a fallback); they receive only your number and the message. Push notifications carry no amounts or personal data beyond your first name.</p>
+          <p>We don&apos;t sell or share your data. Push notifications go through your phone&apos;s notification service (Google or Apple) and carry no amounts or personal data beyond your first name and a notice&apos;s title.</p>
         </section>
         <section>
           <h2>How long we keep it</h2>

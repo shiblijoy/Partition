@@ -71,6 +71,7 @@ export default async function ReviewPage({ params }: PageProps<"/admin/payments/
               <Field label="Amount">{$(total)}</Field>
               <Field label="Method">{METHOD_LABELS[payment.method]}</Field>
               <Field label="Transaction ID">{payment.reference ?? "—"}</Field>
+              <Field label="Member says they paid into">{payment.paidToId ? (accounts.find((a) => a.id === payment.paidToId)?.name ?? "A closed account") : "—"}</Field>
               <Field label="Member says paid on">{fmtDate(payment.paidOn)}</Field>
               <Field label="Submitted">{fmtDateTime(payment.createdAt)}</Field>
               <div className="col-span-2"><Field label="Member note">{payment.note ?? "—"}</Field></div>
@@ -84,7 +85,7 @@ export default async function ReviewPage({ params }: PageProps<"/admin/payments/
           </div>
 
           {payment.status === "PENDING" && canEdit && (
-            <ReviewForm paymentId={payment.id} amount={$(total)} accounts={accounts} paidOn={dateInput(payment.paidOn)} today={dateInput()} />
+            <ReviewForm paymentId={payment.id} amount={$(total)} accounts={accounts} paidOn={dateInput(payment.paidOn)} today={dateInput()} paidToId={payment.paidToId} />
           )}
           {payment.status !== "PENDING" && (
             <div className="flex flex-col gap-3 rounded-2xl border border-line bg-white p-5 text-sm">

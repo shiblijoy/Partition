@@ -16,7 +16,10 @@ export async function deliver(limit = 200): Promise<number> {
     if (!count) continue; // someone else is delivering it
     const first = n.user.name.split(/\s+/)[0];
     try {
-      await pushToUser(n.userId, { title: n.title, body: `Hi ${first}, open Dreamhive for the details.`, url: n.url });
+      // Notices show their title; reminders say what's due without the amount; the rest stay generic.
+      const body =
+        n.kind === "notice" ? n.body : n.kind === "reminder" ? `Hi ${first}, your monthly deposit is due. Tap to pay and upload the proof.` : `Hi ${first}, open Dreamhive for the details.`;
+      await pushToUser(n.userId, { title: n.title, body, url: n.url, kind: n.kind });
       if (n.whatsapp) {
         const { template, params } = JSON.parse(n.whatsapp) as { template: Template; params: string[] };
         const phone = n.user.role === "MEMBER" ? n.user.phone : n.user.contactPhone;

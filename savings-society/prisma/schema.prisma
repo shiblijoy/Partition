@@ -173,6 +173,7 @@ model User {
   exitedAt           DateTime?
   deceasedOn         DateTime?
   language           String       @default("en") // "en" or "bn"
+  avatarPath         String? // profile picture, relative path under /storage
   createdAt          DateTime     @default(now())
 
   // Profile (personal data, encrypted at rest; erased when a member leaves and asks for deletion)
@@ -245,6 +246,7 @@ model Payment {
   receivedOn DateTime? // when the admin confirmed the money arrived
   account    Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
   accountId  String? // society account it arrived in
+  paidToId   String? // the society bank account the member says they paid into
   proofPath  String? // relative path under /storage, served by /files/...
   note       String?
   status     PaymentStatus @default(PENDING)
@@ -313,6 +315,7 @@ model Account {
   maturesOn      DateTime? // FDRs: the admin is reminded 7 days before
   closedOn       DateTime?
   active         Boolean     @default(true)
+  memberDetails  String? // bank accounts: the full details members pay into (bank, branch, A/C name and number)
   createdAt      DateTime    @default(now())
 
   entries  LedgerEntry[]

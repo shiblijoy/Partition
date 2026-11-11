@@ -1,5 +1,5 @@
 /* Dreamhive service worker: push notifications, offline pages, and sending payments saved offline. */
-const CACHE = "dreamhive-v1";
+const CACHE = "dreamhive-v2";
 const OFFLINE_PAGES = ["/member", "/member/history", "/member/invest", "/member/notifications"];
 
 self.addEventListener("install", (event) => {
@@ -31,10 +31,26 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
+// Notices and due reminders ring, vibrate and stay on screen until tapped; Android plays the phone's
+// notification sound (members can pick another one in the app's notification settings).
+const LOUD = ["notice", "reminder"];
 self.addEventListener("push", (event) => {
-  let data = { title: "Dreamhive", body: "Open the app for the details.", url: "/" };
+  let data = { title: "Dreamhive", body: "Open the app for the details.", url: "/", kind: "" };
   try { data = { ...data, ...event.data.json() }; } catch {}
-  event.waitUntil(self.registration.showNotification(data.title, { body: data.body, icon: "/icon.svg", badge: "/icon.svg", data: { url: data.url || "/" } }));
+  const loud = LOUD.includes(data.kind);
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: "/icon-192.png",
+      badge: "/badge-96.png",
+      tag: data.kind || undefined, // a newer notice replaces the older one, and still rings
+      renotify: !!data.kind,
+      silent: false,
+      vibrate: loud ? [400, 150, 400, 150, 400] : [200, 100, 200],
+      requireInteraction: loud,
+      data: { url: data.url || "/" },
+    })
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {

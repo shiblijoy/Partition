@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Avatar } from "@/components/Avatar";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/auth-guard";
 import { getSettings, money } from "@/lib/settings";
@@ -92,9 +93,12 @@ export default async function MembersPage({ searchParams }: PageProps<"/admin/me
                     return (
                       <tr key={m.id} className={`border-b border-[#EFEDE6] ${gone ? "opacity-60" : ""}`}>
                         <td className="px-4 py-3 sm:px-2">
-                          <Link href={`/admin/members/${m.id}`} className="font-bold text-ink">
-                            {m.memberNo != null && <span className="text-muted">#{String(m.memberNo).padStart(2, "0")} </span>}
-                            {m.name}
+                          <Link href={`/admin/members/${m.id}`} className="flex items-center gap-2 font-bold text-ink">
+                            <Avatar name={m.name} path={m.avatarPath} size={28} />
+                            <span>
+                              {m.memberNo != null && <span className="text-muted">#{String(m.memberNo).padStart(2, "0")} </span>}
+                              {m.name}
+                            </span>
                           </Link>
                           <div className="text-xs text-muted">
                             {m.phone}

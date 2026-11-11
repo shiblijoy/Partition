@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Avatar } from "@/components/Avatar";
 import { InstallApp } from "@/components/InstallApp";
 import { prisma } from "@/lib/prisma";
 import { requireMember } from "@/lib/auth-guard";
@@ -8,10 +9,6 @@ import { currentMonth } from "@/lib/months";
 import { tFor, monthName, dateName } from "@/lib/i18n";
 import { Icon } from "@/components/icons";
 import { Badge, METHOD_LABELS, darkButton } from "@/components/ui";
-
-function initials(name: string): string {
-  return name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
-}
 
 export default async function MemberHome() {
   const viewer = await requireMember();
@@ -49,8 +46,8 @@ export default async function MemberHome() {
             <Icon name="bell" />
             {unread > 0 && <span className="absolute right-2.5 top-2.5 h-2.5 w-2.5 rounded-full bg-[#D9822B] ring-2 ring-white" />}
           </Link>
-          <Link href="/member/profile" aria-label={t("My profile")} className="flex h-11 w-11 items-center justify-center rounded-full bg-brand text-[15px] font-bold text-white no-underline">
-            {initials(member.name)}
+          <Link href="/member/profile" aria-label={t("My profile")} className="rounded-full no-underline">
+            <Avatar name={member.name} path={member.avatarPath} size={44} />
           </Link>
         </div>
       </div>

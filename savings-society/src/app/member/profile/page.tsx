@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Avatar } from "@/components/Avatar";
+import { AvatarUpload } from "./AvatarUpload";
 import { prisma } from "@/lib/prisma";
 import { requireMember } from "@/lib/auth-guard";
 import { monthLabel } from "@/lib/months";
@@ -30,7 +32,6 @@ export default async function ProfilePage() {
   const pendingChanges = parseChanges(pendingEdit?.changes ?? null);
   // The form starts from what's waiting for approval, if anything, else the current details.
   const formValue = (f: (typeof EDITABLE_FIELDS)[number][0]) => (f in pendingChanges ? pendingChanges[f]?.to : member[f]) ?? "";
-  const initials = member.name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
 
   const links: Array<[string, string]> = [
     ["/password", t("Change password")],
@@ -48,12 +49,13 @@ export default async function ProfilePage() {
       <ScreenHeader title={t("My profile")} back="/member" />
 
       <div className="flex items-center gap-3.5">
-        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand text-lg font-bold text-white">{initials}</span>
-        <div>
+        <Avatar name={member.name} path={member.avatarPath} size={64} />
+        <div className="flex flex-col gap-0.5">
           <div className="text-lg font-extrabold">{member.name}</div>
           <div className="text-[13px] text-muted">
             {member.memberNo != null && `Member #${String(member.memberNo).padStart(2, "0")} · `}since {monthLabel(member.joinMonth)}
           </div>
+          <AvatarUpload hasPhoto={!!member.avatarPath} />
         </div>
       </div>
 

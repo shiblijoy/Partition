@@ -3,7 +3,6 @@
 import { AssetType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
-import { getSettings } from "@/lib/settings";
 import { audit } from "@/lib/audit";
 import { saveFile, UploadError } from "@/lib/uploads";
 import { attempt, changed, text } from "@/lib/actions";
@@ -15,7 +14,6 @@ import type { FormState } from "@/components/ActionForm";
 export async function uploadDocument(_prev: FormState, formData: FormData): Promise<FormState> {
   return attempt(async () => {
   const admin = await requireAdmin();
-  const settings = await getSettings();
   const asset = String(formData.get("asset") ?? "");
   const docType = String(formData.get("docType") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
@@ -59,11 +57,6 @@ export async function uploadDocument(_prev: FormState, formData: FormData): Prom
   }
   changed();
 
-  return {
-    ok: adminOnly ? "Uploaded (admin-only: members can't see it)." : "Uploaded. Every member can view it in the app.",
-    ...(formData.get("whatsapp") === "on"
-      ? { link: { href: `https://wa.me/?text=${encodeURIComponent(`${settings.societyName}: new document uploaded — ${title}. View it under Asset documents in the app.`)}`, label: "Tell members on WhatsApp" } }
-      : {}),
-  };
+  return { ok: adminOnly ? "Uploaded (admin-only: members can't see it)." : "Uploaded. Every member can view it in the app." };
   });
 }

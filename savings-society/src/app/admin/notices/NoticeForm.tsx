@@ -59,10 +59,6 @@ export function NoticeForm({ proposals }: { proposals: Array<{ id: string; name:
         <label htmlFor="n-file" className={labelClass}>Attach file (agenda, photo, PDF)</label>
         <input id="n-file" name="attachment" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className={fileClass} />
       </div>
-      <label className="flex min-h-11 items-center gap-3 text-sm font-semibold">
-        <input type="checkbox" name="whatsapp" defaultChecked className="h-5 w-5 accent-brand" />
-        Also share on WhatsApp
-      </label>
     </ActionForm>
   );
 }

@@ -88,12 +88,12 @@ export async function reverseIncome(settings: Settings, id: string, reason: stri
 }
 
 /** FR-REC-01: a society account. Only the last 4 digits of its number are kept. */
-export async function addAccount(a: { name: string; type: AccountType; last4: string | null; openingBalance: number; actor: Actor }) {
+export async function addAccount(a: { name: string; type: AccountType; last4: string | null; openingBalance: number; memberDetails?: string | null; actor: Actor }) {
   if (!a.name.trim()) throw new ServiceError("Name the account.");
   if (a.last4 && !/^\d{4}$/.test(a.last4)) throw new ServiceError("Enter only the last 4 digits of the account number.");
   if (!Number.isInteger(a.openingBalance) || a.openingBalance < 0) throw new ServiceError("Opening balance must be a whole amount (0 if new).");
   return inTx(async (tx) => {
-    const row = await tx.account.create({ data: { name: a.name.trim(), type: a.type, last4: a.last4, openingBalance: a.openingBalance } });
+    const row = await tx.account.create({ data: { name: a.name.trim(), type: a.type, last4: a.last4, openingBalance: a.openingBalance, memberDetails: a.type === "BANK" ? a.memberDetails?.trim() || null : null } });
     await audit(a.actor.id, "account.added", `${a.actor.name} added the account ${row.name}`, { db: tx, entity: `account:${row.id}`, after: row });
     return row;
   });

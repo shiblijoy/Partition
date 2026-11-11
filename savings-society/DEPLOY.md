@@ -150,7 +150,7 @@ chown dreamhive:dreamhive .env && chmod 600 .env
 - `APP_URL` goes into the QR code on every receipt. Replace `YOUR-DOMAIN-HERE`.
 - `CRON_SECRET` lets the jobs timer (step 9) run the scheduled jobs.
 
-WhatsApp, SMS and push notifications are optional and added later: see
+Push notifications (step below) are recommended. WhatsApp and SMS are optional and turned off for now: see
 [WhatsApp](#whatsapp-login-codes-passwords-and-reminders),
 [Push notifications](#push-notifications) and the [Android app](#android-app-google-play).
 
@@ -237,21 +237,22 @@ $1 a month; turning that on is a good extra safety net.
 
 1. Open `https://your-domain` and log in with the admin **email** and temporary
    password from step 8. Set your own password.
-2. **Settings:** society name, reminder day, first month, where members should
-   send money, the second-admin limit, and your own WhatsApp number (for the
-   login code). The monthly deposit is set there too; a change applies from a
-   future month only.
+2. **Settings:** society name, reminder day, first month, an optional note for
+   the Pay form, and the second-admin limit. The monthly deposit is set there
+   too; a change applies from a future month only.
 3. **Accounts & ledger:** add each bank account the society keeps money in
-   (members pay by bank only) with only its last 4 digits, and its balance on the
-   day you start using the app.
+   (members pay by bank only) with its last 4 digits and its balance on the day
+   you start using the app. Fill in **Let members pay into this account** with
+   the full bank details: members see them on the Pay form and say which
+   account they paid into.
 4. **Enter past amounts** (deposits with *Record payment*, expenses, income)
    before using *Close month* — a closed month is locked.
-5. **Members → Add member** for each member, with their nominee. With WhatsApp
-   connected the temporary password is sent automatically; otherwise use the
-   *Send it on WhatsApp yourself* button. Members log in with their mobile number
-   and set their own password.
-6. Tell members to open the site on their phone and choose **Add to Home Screen**
-   (or install the Android app, below), then turn on notifications from the bell.
+5. **Members → Add member** for each member, with their nominee. The temporary
+   password is shown once: give it to the member. Members log in with their
+   mobile number and set their own password.
+6. Tell members to open the site on their phone and tap **Install app** on the
+   home page (or **Add to Home Screen**), then turn on notifications from the
+   bell. Notices and due reminders arrive with sound.
 
 ## Updating to a new version
 
@@ -317,9 +318,14 @@ through any gateway that takes a URL. Set
 ## Push notifications
 
 Members get a push for approvals, rejections, receipts, votes, withdrawals and
-notices once they tap *Turn on notifications* in the app. Create the keys once
-with `sudo -u dreamhive npx web-push generate-vapid-keys` in the app folder, add
-them to `.env`, then restart:
+notices once they tap *Turn on notifications* in the app. Notices and due
+reminders ring with the phone's notification sound, vibrate and stay on screen
+until tapped. Create the keys once, add them to `.env`, then restart:
+
+```bash
+cd /opt/dreamhive/savings-society && sudo -u dreamhive -H npx web-push generate-vapid-keys
+```
+
 
 ```bash
 VAPID_PUBLIC_KEY="…"

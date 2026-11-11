@@ -236,3 +236,12 @@ test("a member added later with an earlier first month shares the costs since th
   assert.ok(after.some((a) => a.memberId === late.id));
   assert.ok(after.reduce((t, a) => t + a.paisa, 0) >= -150000); // the total never exceeds the cost
 });
+
+test("a member says which society bank account they paid into; anything else is refused", async () => {
+  const s = await settings();
+  const second = await prisma.account.create({ data: { name: "Second bank", type: "BANK", last4: "1190", memberDetails: "Second bank, A/C 1190" } });
+  const [p] = await pay.submitPayments(s, { memberId: members[9], months: [addMonths(now, 2)], method: "BANK", reference: "INTO-2", paidOn: new Date(), proofPath: null, note: null, paidToId: second.id });
+  assert.equal(p.paidToId, second.id);
+  const closed = await prisma.account.create({ data: { name: "Old bank", type: "BANK", active: false } });
+  await assert.rejects(pay.submitPayments(s, { memberId: members[9], months: [addMonths(now, 3)], method: "BANK", reference: "INTO-X", paidOn: new Date(), proofPath: null, note: null, paidToId: closed.id }), /society's bank accounts/);
+});

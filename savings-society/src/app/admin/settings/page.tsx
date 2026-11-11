@@ -5,7 +5,7 @@ import { addMonths, currentMonth, monthLabel } from "@/lib/months";
 import { fmtDate, fmtDay } from "@/lib/format";
 import { whatsappConfigured } from "@/lib/messaging";
 import { pushConfigured } from "@/lib/push";
-import { Card, Line, Notice, PageHeader, Pill, inputClass, labelClass, primaryButton, secondaryButton, smallSecondary, textareaClass, VOTE_RULE_LABELS } from "@/components/ui";
+import { Card, Line, PageHeader, Pill, inputClass, labelClass, primaryButton, secondaryButton, smallSecondary, textareaClass, VOTE_RULE_LABELS } from "@/components/ui";
 import { ActionForm } from "@/components/ActionForm";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { PrintButton } from "@/components/PrintButton";
@@ -60,7 +60,7 @@ export default async function SettingsPage() {
               </div>
               <label className="flex min-h-11 items-center gap-3 text-sm font-semibold">
                 <input type="checkbox" name="remindersOn" defaultChecked={settings.remindersOn} className="h-5 w-5 accent-brand" />
-                Send due reminders automatically on the reminder day{whatsappConfigured() ? " (WhatsApp and the app)" : " (in the app; WhatsApp once connected)"}
+                Send due reminders automatically on the reminder day (in the app, with a push notification{whatsappConfigured() ? ", and on WhatsApp" : ""})
               </label>
               <fieldset>
                 <legend className={`${labelClass} mb-1`}>Default vote rule</legend>
@@ -74,10 +74,10 @@ export default async function SettingsPage() {
                 </div>
               </fieldset>
               <div>
-                <label htmlFor="paymentInfo" className={labelClass}>Where members should send money</label>
-                <textarea id="paymentInfo" name="paymentInfo" rows={3} defaultValue={settings.paymentInfo ?? ""} placeholder={"Bank: [Bank name], [Branch]\nA/C name: [Society name]\nA/C ending [4 digits]"} className={textareaClass} />
+                <label htmlFor="paymentInfo" className={labelClass}>Note for members on the Pay form (optional)</label>
+                <textarea id="paymentInfo" name="paymentInfo" rows={3} defaultValue={settings.paymentInfo ?? ""} placeholder={"e.g. Write your member number in the transfer reference."} className={textareaClass} />
+                <p className="mt-1 text-xs text-muted">The bank accounts members pay into, with their full details, are set on <a href="/admin/accounts">Accounts &amp; ledger</a>.</p>
               </div>
-              <p className="text-[13px] text-muted">Society accounts are managed on <a href="/admin/accounts">Accounts &amp; ledger</a>.</p>
             </ActionForm>
           </Card>
 
@@ -117,7 +117,7 @@ export default async function SettingsPage() {
 
           <Card title="Connections">
             <ul className="flex flex-col gap-2 text-sm">
-              <li className="flex justify-between gap-2"><span>WhatsApp Business (codes, passwords, reminders)</span><Pill tone={whatsappConfigured() ? "good" : "neutral"}>{whatsappConfigured() ? "Connected" : "Not set up"}</Pill></li>
+              {whatsappConfigured() && <li className="flex justify-between gap-2"><span>WhatsApp Business (codes, passwords, reminders)</span><Pill tone="good">Connected</Pill></li>}
               <li className="flex justify-between gap-2"><span>SMS fallback</span><Pill tone={process.env.SMS_GATEWAY_URL ? "good" : "neutral"}>{process.env.SMS_GATEWAY_URL ? "Connected" : "Not set up"}</Pill></li>
               <li className="flex justify-between gap-2"><span>Push notifications</span><Pill tone={pushConfigured() ? "good" : "neutral"}>{pushConfigured() ? "On" : "Not set up"}</Pill></li>
             </ul>
@@ -161,10 +161,12 @@ export default async function SettingsPage() {
                     <label htmlFor="a-email" className={labelClass}>Email (login)</label>
                     <input id="a-email" name="email" type="email" required className={inputClass} />
                   </div>
-                  <div>
-                    <label htmlFor="a-phone" className={labelClass}>WhatsApp number (login codes, temporary password)</label>
-                    <input id="a-phone" name="contactPhone" type="tel" className={inputClass} />
-                  </div>
+                  {whatsappConfigured() && (
+                    <div>
+                      <label htmlFor="a-phone" className={labelClass}>WhatsApp number (login codes, temporary password)</label>
+                      <input id="a-phone" name="contactPhone" type="tel" className={inputClass} />
+                    </div>
+                  )}
                 </ActionForm>
               </details>
             )}
@@ -218,7 +220,7 @@ export default async function SettingsPage() {
 
           <Card title="My account">
             <div id="me" className="flex flex-col gap-4">
-              {canEdit && (
+              {canEdit && whatsappConfigured() && (
                 <ActionForm action={setMyContactPhone} submitLabel="Save WhatsApp number" buttonClass={secondaryButton} resetOnSuccess={false} className="flex flex-col gap-3">
                   <div>
                     <label htmlFor="me-phone" className={labelClass}>My WhatsApp number (receives the 6-digit login code)</label>
@@ -226,7 +228,6 @@ export default async function SettingsPage() {
                   </div>
                 </ActionForm>
               )}
-              {!whatsappConfigured() && <Notice tone="neutral">Two-step login turns on once WhatsApp is connected and your number is saved.</Notice>}
               <a href="/password" className={`${secondaryButton} no-underline`}>Change my password</a>
             </div>
           </Card>

@@ -22,17 +22,20 @@ export function PayForm({
   currency,
   monthlyLabel,
   paymentInfo,
+  banks,
   today,
 }: {
   months: Array<{ key: string; label: string; due: boolean; amount: number }>;
   currency: string;
   monthlyLabel: string;
   paymentInfo: string | null;
+  banks: Array<{ id: string; name: string; details: string }>;
   today: string;
 }) {
   const t = useT();
   const [state, formAction, pending] = useActionState(submitPayment, initialState);
   const [picked, setPicked] = useState<string[]>(months[0] ? [months[0].key] : []);
+  const [bank, setBank] = useState<string | null>(banks.length === 1 ? banks[0].id : null);
   const [preview, setPreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [compressing, setCompressing] = useState(false);
@@ -115,11 +118,27 @@ export function PayForm({
         <div className="text-right text-xs leading-snug text-muted">{t("{amount} a month", { amount: monthlyLabel })}<br />{t("set by admin")}</div>
       </div>
 
-      {paymentInfo && (
-        <div className="whitespace-pre-line rounded-2xl border border-line bg-white px-4 py-3 text-[13px] leading-relaxed">
-          <p className="font-bold">{t("Where to send money")}</p>
-          {paymentInfo}
-        </div>
+      {banks.length > 0 ? (
+        <fieldset className="flex flex-col gap-2">
+          <legend className={`${labelClass} mb-2`}>{banks.length > 1 ? t("Which society account did you pay into?") : t("Society bank account")}</legend>
+          {banks.map((b) => (
+            <label key={b.id} className={`flex cursor-pointer gap-3 rounded-2xl bg-white px-4 py-3 text-[13px] leading-relaxed has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand/40 ${bank === b.id ? "border-2 border-brand" : "border border-line"}`}>
+              <input type="radio" name="paidToId" value={b.id} required checked={bank === b.id} onChange={() => setBank(b.id)} className="mt-1 h-5 w-5 shrink-0 accent-brand" />
+              <span className="flex flex-col">
+                <span className="font-bold">{b.name}</span>
+                <span className="whitespace-pre-line text-muted">{b.details}</span>
+              </span>
+            </label>
+          ))}
+          {paymentInfo && <p className="whitespace-pre-line text-xs text-muted">{paymentInfo}</p>}
+        </fieldset>
+      ) : (
+        paymentInfo && (
+          <div className="whitespace-pre-line rounded-2xl border border-line bg-white px-4 py-3 text-[13px] leading-relaxed">
+            <p className="font-bold">{t("Where to send money")}</p>
+            {paymentInfo}
+          </div>
+        )
       )}
 
       <input type="hidden" name="method" value="BANK" />

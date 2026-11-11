@@ -16,6 +16,7 @@ export type MemberWithLedger = {
   name: string;
   phone: string;
   email: string | null;
+  avatarPath: string | null;
   joinMonth: string;
   joiningRule: string;
   active: boolean;
@@ -47,6 +48,7 @@ export async function membersWithLedgers(settings: Settings, opts: { includeInac
     name: m.name,
     phone: m.phone,
     email: m.email,
+    avatarPath: m.avatarPath,
     joinMonth: m.joinMonth,
     joiningRule: m.joiningRule,
     active: m.active,

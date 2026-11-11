@@ -17,6 +17,7 @@ export async function handleSubmission(memberId: string, formData: FormData): Pr
   const note = String(formData.get("note") ?? "").trim() || null;
   const proof = formData.get("proof");
   const confirmed = formData.get("confirmDuplicate") === "on" || formData.get("offline") === "1";
+  const paidToId = String(formData.get("paidToId") ?? "") || null;
 
   if (months.length === 0) return { error: "Pick the month (or months) you're paying for." };
   if (method !== PaymentMethod.BANK) return { error: "Only bank payments are accepted." };
@@ -38,7 +39,7 @@ export async function handleSubmission(memberId: string, formData: FormData): Pr
   }
   const paidOn = paidOnRaw ? new Date(`${paidOnRaw}T12:00:00`) : new Date();
   try {
-    await submitPayments(settings, { memberId, months, method, reference, paidOn, proofPath, note });
+    await submitPayments(settings, { memberId, months, method, reference, paidOn, proofPath, note, paidToId });
   } catch (err) {
     if (err instanceof ServiceError) return { error: err.message };
     throw err;

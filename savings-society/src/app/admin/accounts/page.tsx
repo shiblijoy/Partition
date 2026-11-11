@@ -6,8 +6,8 @@ import { accountBalances, openAccounts } from "@/lib/books";
 import { dateInput, fmtDay } from "@/lib/format";
 import { ActionForm } from "@/components/ActionForm";
 import { AccountSelect } from "@/components/AccountSelect";
-import { Card, Empty, PageHeader, StatCard, inputClass, labelClass, smallSecondary, ACCOUNT_TYPE_LABELS } from "@/components/ui";
-import { addAccount, closeAccount, moveMoney } from "./actions";
+import { Card, Empty, PageHeader, StatCard, inputClass, labelClass, smallSecondary, textareaClass, ACCOUNT_TYPE_LABELS } from "@/components/ui";
+import { addAccount, closeAccount, moveMoney, setMemberDetails } from "./actions";
 
 const TYPE_LABEL: Record<string, string> = { DEPOSIT: "Deposit", EXPENSE: "Expense", INCOME: "Income", INVEST_OUT: "Invested", CAPITAL_BACK: "Capital back", PAYOUT: "Payout", TRANSFER: "Transfer" };
 
@@ -96,10 +96,22 @@ export default async function AccountsPage({ searchParams }: PageProps<"/admin/a
           <Card title="Society accounts">
             <ul className="flex flex-col">
               {balances.map((a) => (
-                <li key={a.id} className={`flex items-center justify-between gap-2 border-b border-[#EFEDE6] py-2.5 last:border-0 ${a.active ? "" : "opacity-50"}`}>
-                  <div>
+                <li key={a.id} className={`flex flex-wrap items-center justify-between gap-2 border-b border-[#EFEDE6] py-2.5 last:border-0 ${a.active ? "" : "opacity-50"}`}>
+                  <div className="min-w-0 flex-1">
                     <div className="text-sm font-bold">{a.name}{a.last4 && ` ••${a.last4}`}</div>
-                    <div className="text-xs text-muted">{ACCOUNT_TYPE_LABELS[a.type]}{a.openingBalance ? ` · opening ${$(a.openingBalance)}` : ""}{!a.active && " · closed"}</div>
+                    <div className="text-xs text-muted">
+                      {ACCOUNT_TYPE_LABELS[a.type]}{a.openingBalance ? ` · opening ${$(a.openingBalance)}` : ""}{!a.active && " · closed"}
+                      {a.type === "BANK" && a.active && (a.memberDetails ? " · members can pay into it" : " · not shown to members")}
+                    </div>
+                    {canEdit && a.type === "BANK" && a.active && (
+                      <details className="mt-1">
+                        <summary className="cursor-pointer text-xs font-bold text-brand">{a.memberDetails ? "Edit details members see" : "Let members pay into this account"}</summary>
+                        <ActionForm action={setMemberDetails.bind(null, a.id)} submitLabel="Save details" buttonClass={smallSecondary} resetOnSuccess={false} className="mt-2 flex flex-col gap-2">
+                          <textarea name="memberDetails" rows={3} defaultValue={a.memberDetails ?? ""} aria-label={`Payment details for ${a.name}`} placeholder={"Bank and branch\nAccount name\nAccount number"} className={textareaClass} />
+                          <p className="text-xs text-muted">Shown to members on the Pay form. Leave empty to hide this account from them.</p>
+                        </ActionForm>
+                      </details>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold">{$(a.balance)}</span>
@@ -134,7 +146,11 @@ export default async function AccountsPage({ searchParams }: PageProps<"/admin/a
                     <label htmlFor="ac-open" className={labelClass}>Balance when the app started keeping its books</label>
                     <input id="ac-open" name="openingBalance" type="number" min="0" defaultValue={0} className={inputClass} />
                   </div>
-                  <p className="text-xs text-muted">Only the last 4 digits of an account number are stored.</p>
+                  <div>
+                    <label htmlFor="ac-details" className={labelClass}>Bank accounts: details members pay into (optional)</label>
+                    <textarea id="ac-details" name="memberDetails" rows={3} placeholder={"Bank and branch\nAccount name\nAccount number"} className={textareaClass} />
+                  </div>
+                  <p className="text-xs text-muted">The ledger shows only the last 4 digits. The full details above are shown to members on the Pay form so they know where to send money; leave them empty to keep the account off the Pay form.</p>
                 </ActionForm>
               </details>
             )}
