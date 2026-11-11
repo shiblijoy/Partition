@@ -82,3 +82,22 @@ export async function memberStatement(memberId: string) {
   ]);
   return { member, position: await memberPosition(memberId, fund), fund };
 }
+
+/** Everything since the society started: all-time totals, each year side by side, and where it stands today. */
+export async function totalReport() {
+  const settings = await getSettings();
+  const firstYear = Number(settings.startMonth.slice(0, 4));
+  const thisYear = new Date().getFullYear();
+  const years: number[] = [];
+  for (let y = firstYear; y <= thisYear; y++) years.push(y);
+  const [all, byYear, fund, members, left, closedMonths] = await Promise.all([
+    periodReport(new Date(2000, 0, 1), new Date()),
+    Promise.all(years.map(async (year) => ({ year, ...(await periodReport(new Date(year, 0, 1), new Date(year, 11, 31, 23, 59, 59, 999))) }))),
+    fundSummary(),
+    prisma.user.count({ where: { role: "MEMBER", active: true, exit: null } }),
+    prisma.user.count({ where: { role: "MEMBER", OR: [{ active: false }, { exit: { not: null } }] } }),
+    prisma.monthClose.count(),
+  ]);
+  const monthsSoFar = monthRange(settings.startMonth, currentMonth()).length;
+  return { settings, all, byYear: byYear.reverse(), fund, members, left, closedMonths, monthsSoFar };
+}

@@ -1,4 +1,5 @@
 import { after } from "next/server";
+import { notifyPolls } from "@/lib/services/polls";
 import { prisma } from "@/lib/prisma";
 import { getSettings, money } from "@/lib/settings";
 import { membersWithLedgers } from "@/lib/society";
@@ -79,6 +80,10 @@ export async function runDueJobs(now = new Date()) {
   const old = new Date(now.getTime() - 30 * 86_400_000);
   await prisma.session.deleteMany({ where: { OR: [{ expiresAt: { lt: old } }, { revokedAt: { lt: old } }] } });
   await prisma.loginCode.deleteMany({ where: { createdAt: { lt: old } } });
+
+  // Polls: voters are told when one opens and when its result is in.
+  const pollNotes = await notifyPolls(now);
+  if (pollNotes) report.push(`poll notifications: ${pollNotes}`);
 
   const sent = await deliver();
   if (sent) report.push(`delivered: ${sent}`);

@@ -245,3 +245,36 @@ test("a member says which society bank account they paid into; anything else is 
   const closed = await prisma.account.create({ data: { name: "Old bank", type: "BANK", active: false } });
   await assert.rejects(pay.submitPayments(s, { memberId: members[9], months: [addMonths(now, 3)], method: "BANK", reference: "INTO-X", paidOn: new Date(), proofPath: null, note: null, paidToId: closed.id }), /society's bank accounts/);
 });
+
+test("polls: admins create them; one changeable vote each; only the right people vote; winners and notifications", async () => {
+  const polls = await import("@/lib/services/polls");
+  const soon = new Date(Date.now() + 86_400_000);
+  const p = await polls.createPoll({ question: "Annual meeting venue?", details: null, audience: "MEMBERS", options: ["Office", "Restaurant", "Office"], opensAt: new Date(Date.now() - 60_000), closesAt: soon, actor: admin });
+  const options = await prisma.pollOption.findMany({ where: { pollId: p.id }, orderBy: { position: "asc" } });
+  assert.deepEqual(options.map((o) => o.label), ["Office", "Restaurant"]); // duplicates dropped
+  // Voters were told it's open (with sound: kind "poll").
+  assert.ok((await prisma.notification.count({ where: { kind: "poll", userId: members[9] } })) >= 1);
+
+  await polls.castPollVote(p.id, members[9], options[0].id);
+  await polls.castPollVote(p.id, members[9], options[1].id); // changed, not doubled
+  await polls.castPollVote(p.id, members[8], options[1].id);
+  await assert.rejects(polls.castPollVote(p.id, admin.id, options[0].id), /Only current members/);
+  let r = polls.pollResult(await prisma.poll.findUniqueOrThrow({ where: { id: p.id }, include: { options: true, votes: true } }));
+  assert.equal(r.total, 2);
+  assert.deepEqual(r.winners, ["Restaurant"]);
+
+  await polls.closePollNow(p.id, admin);
+  await assert.rejects(polls.castPollVote(p.id, members[7], options[0].id), /closed/);
+  r = polls.pollResult(await prisma.poll.findUniqueOrThrow({ where: { id: p.id }, include: { options: true, votes: true } }));
+  assert.deepEqual(r.winners, ["Restaurant"]);
+
+  // Admins-only polls: members can't vote; a poll that hasn't opened yet takes no votes.
+  const internal = await polls.createPoll({ question: "Approve the new auditor?", details: null, audience: "ADMINS", options: ["Yes", "No"], opensAt: new Date(Date.now() - 60_000), closesAt: soon, actor: admin });
+  const [yes] = await prisma.pollOption.findMany({ where: { pollId: internal.id }, orderBy: { position: "asc" } });
+  await assert.rejects(polls.castPollVote(internal.id, members[9], yes.id), /Only the admins/);
+  await polls.castPollVote(internal.id, admin.id, yes.id);
+  const later = await polls.createPoll({ question: "Later one", details: null, audience: "MEMBERS", options: ["A", "B"], opensAt: soon, closesAt: new Date(soon.getTime() + 86_400_000), actor: admin });
+  const [a] = await prisma.pollOption.findMany({ where: { pollId: later.id } });
+  await assert.rejects(polls.castPollVote(later.id, members[9], a.id), /opens/);
+  await assert.rejects(polls.createPoll({ question: "Bad", details: null, audience: "MEMBERS", options: ["Only one"], opensAt: new Date(), closesAt: soon, actor: admin }), /two choices/);
+});

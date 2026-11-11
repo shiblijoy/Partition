@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { routeStaff } from "@/lib/admin-route";
 import { isMonthKey, monthLabel } from "@/lib/months";
 import { fmtDate, fmtDateTime } from "@/lib/format";
-import { buildReport, memberStatement, monthReport, periodReport } from "../data";
+import { buildReport, memberStatement, monthReport, periodReport, totalReport } from "../data";
 import { memberPosition } from "@/lib/society";
 
 function csvCell(value: string | number): string {
@@ -70,6 +70,36 @@ export async function GET(req: Request) {
         ["Cash at year end", r.closing],
       ],
       `annual-${year}`
+    );
+  }
+
+  if (type === "total") {
+    const r = await totalReport();
+    const a = r.all;
+    return csv(
+      [
+        ["Total summary", `since ${monthLabel(r.settings.startMonth, "long")}`, `as of ${fmtDate(new Date())}`],
+        [],
+        ["Item", "Amount"],
+        ["Opening balances", a.opening],
+        ["Deposits approved", a.deposits],
+        ["Income and profit", a.incomeTotal],
+        ["Investments returned", a.returned],
+        ["Expenses", -a.expenseTotal],
+        ["Invested", -a.invested],
+        ["Paid to members who left", -a.payoutTotal],
+        ["Cash today", a.closing],
+        ["Money invested now", r.fund.invested],
+        ["Fund today", r.fund.balance],
+        [],
+        ["Year", "Deposits", "Income", "Expenses", "Invested", "Cash at year end"],
+        ...r.byYear.map((y) => [y.year, y.deposits, y.incomeTotal, y.expenseTotal, y.invested, y.closing]),
+        ["All years", a.deposits, a.incomeTotal, a.expenseTotal, a.invested, a.closing],
+        [],
+        ["Current members", r.members],
+        ["Members who left", r.left],
+      ],
+      "total-summary"
     );
   }
 

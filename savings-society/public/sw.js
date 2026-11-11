@@ -1,5 +1,5 @@
 /* Dreamhive service worker: push notifications, offline pages, and sending payments saved offline. */
-const CACHE = "dreamhive-v2";
+const CACHE = "dreamhive-v3";
 const OFFLINE_PAGES = ["/member", "/member/history", "/member/invest", "/member/notifications"];
 
 self.addEventListener("install", (event) => {
@@ -33,7 +33,7 @@ self.addEventListener("fetch", (event) => {
 
 // Notices and due reminders ring, vibrate and stay on screen until tapped; Android plays the phone's
 // notification sound (members can pick another one in the app's notification settings).
-const LOUD = ["notice", "reminder"];
+const LOUD = ["notice", "reminder", "poll"];
 self.addEventListener("push", (event) => {
   let data = { title: "Dreamhive", body: "Open the app for the details.", url: "/", kind: "" };
   try { data = { ...data, ...event.data.json() }; } catch {}
