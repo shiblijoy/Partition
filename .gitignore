@@ -46,6 +46,3 @@ next-env.d.ts
 # database
 *.db
 *.db-journal
-
-# user-uploaded animal photos (runtime data, not source)
-/public/uploads/
